@@ -51,8 +51,9 @@ pub use backend::{
 };
 pub use host::{ChatHost, NoHost};
 pub use session::{
-    spawn, ChatConfigOption, ChatConfigValue, ChatEvent, ChatSession, SpawnOptions,
-    SpawnedChatSession,
+    config_for_backend, spawn, upsert_backend_config, ChatBackendConfig, ChatConfigOption,
+    ChatConfigValue, ChatEvent, ChatSession, SpawnOptions, SpawnedChatSession,
 };
+pub use store::{ChatConversationRecord, ChatMessageRecord, ChatTurnEnvironment};
 pub use transcript::apply_chat_event;
 pub use wire::{emission, ChatEmission, ChatUpdate};

@@ -191,7 +191,128 @@ describe("with an agent running", () => {
   });
 });
 
+const SAVED_THREAD = {
+  conversation_id: "conv-1",
+  backend: "ClaudeCode" as const,
+  backend_session_id: "agent-1",
+  cwd: "/tmp/chat",
+  title: "What is a monad?",
+  created_at: "2026-09-01T10:00:00Z",
+  updated_at: "2026-09-01T10:05:00Z",
+  last_opened_at: "2026-09-01T10:05:00Z",
+  config_values: [],
+  messages: [
+    {
+      message_id: "m1",
+      turn_id: "t1",
+      role: "user" as const,
+      thought: "",
+      content: [{ kind: "text" as const, text: "What is a monad?" }],
+      error: null,
+    },
+    {
+      message_id: "t1",
+      turn_id: "t1",
+      role: "assistant" as const,
+      thought: "",
+      content: [{ kind: "text" as const, text: "A monoid in the category of endofunctors." }],
+      error: null,
+    },
+  ],
+};
+
+describe("branching", () => {
+  async function openSaved() {
+    build({ conversations: [SAVED_THREAD] });
+    await mount();
+    await waitFor(() => expect(store.getState().conversations).toHaveLength(1));
+    await act(async () => {
+      await store.getState().openConversation("conv-1");
+    });
+  }
+
+  it("offers a branch on every message once the conversation is saved", async () => {
+    await openSaved();
+
+    expect(
+      await screen.findByRole("button", { name: /branch from your message/i }),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: /branch from the assistant's message/i })).toBeTruthy();
+  });
+
+  it("offers no branch on an unsaved conversation", async () => {
+    // There is no record to branch from yet, so a button here would be one
+    // that cannot work.
+    build();
+    await mount();
+    await waitFor(() => expect(store.getState().sessionId).toBeTruthy());
+    await userEvent.type(screen.getByLabelText("Message"), "hello{Enter}");
+    await screen.findByText("hello");
+
+    expect(screen.queryByRole("button", { name: /branch from/i })).toBeNull();
+  });
+
+  it("branches from an answer", async () => {
+    await openSaved();
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /branch from the assistant's message/i }),
+    );
+
+    await waitFor(() => expect(transport.forked).toHaveLength(1));
+    expect(transport.forked[0].includeMessage).toBe(true);
+  });
+
+  it("re-asks an edited question in a branch of its own", async () => {
+    await openSaved();
+
+    await userEvent.click(await screen.findByRole("button", { name: /edit your message/i }));
+    const box = await screen.findByLabelText("Edit message text");
+    await userEvent.clear(box);
+    await userEvent.type(box, "What is a functor?");
+    await userEvent.click(screen.getByRole("button", { name: /ask in a branch/i }));
+
+    await waitFor(() => expect(transport.forked).toHaveLength(1));
+    expect(transport.forked[0].includeMessage).toBe(false);
+    await waitFor(() => expect(transport.turns).toHaveLength(1));
+    expect(transport.lastTurn().text).toBe("What is a functor?");
+  });
+
+  it("lets an edit be abandoned", async () => {
+    await openSaved();
+
+    await userEvent.click(await screen.findByRole("button", { name: /edit your message/i }));
+    await userEvent.click(screen.getByRole("button", { name: /cancel/i }));
+
+    expect(screen.queryByLabelText("Edit message text")).toBeNull();
+    expect(transport.forked).toHaveLength(0);
+    // The original is still there, unchanged.
+    expect(screen.getByText("What is a monad?")).toBeTruthy();
+  });
+
+  it("offers no edit on an assistant message", async () => {
+    await openSaved();
+    await screen.findByRole("button", { name: /branch from your message/i });
+
+    expect(screen.getAllByRole("button", { name: /edit your message/i })).toHaveLength(1);
+  });
+});
+
 describe("saved chats", () => {
+  it("marks a branch so it is not mistaken for an unrelated chat", async () => {
+    build({
+      conversations: [
+        { ...SAVED_THREAD, conversation_id: "conv-2", title: "Fork of What is a monad?", parent_conversation_id: "conv-1" },
+        SAVED_THREAD,
+      ],
+    });
+    await mount();
+    await waitFor(() => expect(store.getState().conversations).toHaveLength(2));
+
+    await userEvent.click(screen.getByRole("button", { name: /saved chats/i }));
+    expect(await screen.findByText(/↳/)).toBeTruthy();
+  });
+
   it("lists them and reopens the one that is picked", async () => {
     build({
       conversations: [

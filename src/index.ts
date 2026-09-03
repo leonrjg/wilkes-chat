@@ -45,6 +45,7 @@ export type {
 export type {
   AgentBackend,
   BackendStatus,
+  ChatBackendConfig,
   ChatConfigChoice,
   ChatConfigOption,
   ChatConfigValue,
@@ -58,5 +59,6 @@ export type {
   ChatToolCallRecord,
   ChatToolContentBlock,
   ChatToolLocation,
+  ChatTurnEnvironment,
   ChatUpdate,
 } from "./types";

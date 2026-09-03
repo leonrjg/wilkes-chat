@@ -360,6 +360,126 @@ describe("saved conversations", () => {
   });
 });
 
+describe("branching a conversation", () => {
+  const saved: ChatConversationRecord = {
+    conversation_id: "conv-1",
+    backend: "ClaudeCode",
+    backend_session_id: "agent-session-1",
+    cwd: "/tmp/chat",
+    title: "What is a monad?",
+    created_at: "2026-09-01T10:00:00Z",
+    updated_at: "2026-09-01T10:05:00Z",
+    last_opened_at: "2026-09-01T10:05:00Z",
+    config_values: [],
+    messages: [
+      {
+        message_id: "m1",
+        turn_id: "t1",
+        role: "user",
+        thought: "",
+        content: [{ kind: "text", text: "What is a monad?" }],
+        error: null,
+      },
+      {
+        message_id: "t1",
+        turn_id: "t1",
+        role: "assistant",
+        thought: "",
+        content: [{ kind: "text", text: "A monoid in the category of endofunctors." }],
+        error: null,
+      },
+    ],
+  };
+
+  async function opened() {
+    build({ conversations: [saved] });
+    await store.getState().loadConversations();
+    await store.getState().openConversation("conv-1");
+  }
+
+  it("keeps an answer when branching from it, and does not re-ask anything", async () => {
+    await opened();
+
+    await store.getState().forkFromMessage("t1");
+
+    expect(transport.forked).toEqual([
+      { conversationId: "conv-1", messageId: "t1", includeMessage: true },
+    ]);
+    // Branching from an answer continues *after* it; nothing has been asked.
+    expect(transport.turns).toHaveLength(0);
+    expect(store.getState().messages).toHaveLength(2);
+  });
+
+  it("re-asks a question when branching from it", async () => {
+    await opened();
+
+    await store.getState().forkFromMessage("m1");
+
+    expect(transport.forked[0].includeMessage).toBe(false);
+    expect(transport.turns).toHaveLength(1);
+    expect(transport.lastTurn().text).toBe("What is a monad?");
+  });
+
+  it("closes the session it branched away from", async () => {
+    await opened();
+    const before = store.getState().sessionId;
+
+    await store.getState().forkFromMessage("t1");
+
+    expect(transport.closed).toContain(before);
+    expect(store.getState().sessionId).not.toBe(before);
+  });
+
+  it("asks the edited question instead of the original", async () => {
+    await opened();
+
+    await store.getState().editMessage("m1", "  What is a functor?  ");
+
+    expect(transport.forked[0]).toEqual({
+      conversationId: "conv-1",
+      messageId: "m1",
+      includeMessage: false,
+    });
+    expect(transport.lastTurn().text).toBe("What is a functor?");
+  });
+
+  it("will not edit an answer, only a question", async () => {
+    await opened();
+
+    await store.getState().editMessage("t1", "rewritten");
+
+    expect(transport.forked).toHaveLength(0);
+  });
+
+  it("will not edit a question to nothing", async () => {
+    await opened();
+
+    await store.getState().editMessage("m1", "   ");
+
+    expect(transport.forked).toHaveLength(0);
+  });
+
+  it("branches nothing from an unsaved conversation", async () => {
+    // The fork is taken from the record on disk, and a backend that keeps no
+    // record has none to take.
+    build();
+    await store.getState().switchBackend("ClaudeCode");
+
+    await store.getState().forkFromMessage("whatever");
+
+    expect(transport.forked).toHaveLength(0);
+  });
+
+  it("branches nothing while a turn is running", async () => {
+    await opened();
+    void store.getState().sendMessage("hold on");
+
+    await store.getState().forkFromMessage("t1");
+
+    expect(transport.forked).toHaveLength(0);
+  });
+});
+
 describe("resetting", () => {
   it("closes the session and empties the thread", async () => {
     await store.getState().switchBackend("ClaudeCode");

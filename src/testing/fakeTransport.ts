@@ -77,6 +77,11 @@ export interface FakeTransport extends ChatTransport {
   readonly closed: string[];
   readonly cancelled: Array<{ sessionId: string; turnId: string }>;
   readonly answered: Array<{ requestId: string; optionId: string | null }>;
+  readonly forked: Array<{
+    conversationId: string;
+    messageId: string;
+    includeMessage: boolean;
+  }>;
 }
 
 export function createFakeTransport(options: FakeTransportOptions = {}): FakeTransport {
@@ -88,6 +93,7 @@ export function createFakeTransport(options: FakeTransportOptions = {}): FakeTra
   const closed: string[] = [];
   const cancelled: Array<{ sessionId: string; turnId: string }> = [];
   const answered: Array<{ requestId: string; optionId: string | null }> = [];
+  const forked: FakeTransport["forked"] = [];
   const errorHandlers = new Map<string, (message: string) => void>();
   const configHandlers = new Map<string, (options: ChatConfigOption[]) => void>();
 
@@ -109,6 +115,7 @@ export function createFakeTransport(options: FakeTransportOptions = {}): FakeTra
     closed,
     cancelled,
     answered,
+    forked,
 
     lastTurn() {
       const turn = turns[turns.length - 1];
@@ -148,6 +155,28 @@ export function createFakeTransport(options: FakeTransportOptions = {}): FakeTra
       const record = conversations.find((c) => c.conversation_id === conversationId);
       if (!record) throw new Error(`no such conversation: ${conversationId}`);
       return { ...started(id("session"), conversationId), messages: record.messages };
+    },
+
+    forkConversation: async (conversationId, messageId, includeMessage) => {
+      const source = conversations.find((c) => c.conversation_id === conversationId);
+      if (!source) throw new Error(`no such conversation: ${conversationId}`);
+      const index = source.messages.findIndex((m) => m.message_id === messageId);
+      if (index === -1) throw new Error(`no such message: ${messageId}`);
+
+      const fork: ChatConversationRecord = {
+        ...source,
+        conversation_id: id("conversation"),
+        title: `Fork of ${source.title}`,
+        messages: source.messages.slice(0, includeMessage ? index + 1 : index),
+        parent_conversation_id: conversationId,
+        forked_from_message_id: messageId,
+      };
+      conversations = [fork, ...conversations];
+      forked.push({ conversationId, messageId, includeMessage });
+      return {
+        ...started(id("session"), fork.conversation_id),
+        messages: fork.messages,
+      };
     },
 
     close: async (sessionId) => {

@@ -114,6 +114,26 @@ export const ToolIcon = (props: IconProps) =>
     props,
   );
 
+export const BranchIcon = (props: IconProps) =>
+  svg(
+    <>
+      <line x1="6" y1="3" x2="6" y2="15" />
+      <circle cx="18" cy="6" r="3" />
+      <circle cx="6" cy="18" r="3" />
+      <path d="M18 9a9 9 0 0 1-9 9" />
+    </>,
+    props,
+  );
+
+export const EditIcon = (props: IconProps) =>
+  svg(
+    <>
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </>,
+    props,
+  );
+
 export const CloseIcon = (props: IconProps) =>
   svg(
     <>

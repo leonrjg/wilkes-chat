@@ -367,6 +367,17 @@
   display: flex;
   flex-direction: column;
   max-width: 100%;
+  /* There is no virtualizer here, and this is what pays for that. A resumed
+     conversation can be hundreds of messages of markdown, and the browser
+     skips layout and paint for the ones scrolled out of view — without a
+     virtualizer's scroll correction, which is what fought the stick-to-bottom
+     rules for control of scrollTop in the pane this came from.
+     `contain-intrinsic-size` is the guess it uses for a skipped message, so
+     the scrollbar does not jump as they come into view; `auto` keeps the last
+     real height once one has been measured. Find-in-page still reaches them,
+     which a virtualizer cannot say. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 90px;
 }
 
 .acp-chat__message--user {
@@ -423,6 +434,19 @@
 .acp-chat__message:hover .acp-chat__message-actions,
 .acp-chat__message:focus-within .acp-chat__message-actions {
   opacity: 1;
+}
+
+.acp-chat__edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: min(320px, 60vw);
+}
+
+.acp-chat__edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
 }
 
 .acp-chat__message-error {

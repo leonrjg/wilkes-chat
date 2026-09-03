@@ -2,7 +2,7 @@ import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-import { CheckIcon, ChevronIcon, CopyIcon, ToolIcon } from "./icons";
+import { BranchIcon, CheckIcon, ChevronIcon, CopyIcon, EditIcon, ToolIcon } from "./icons";
 import {
   messageElapsedLabel,
   messageText,
@@ -173,6 +173,16 @@ export interface MessageBubbleProps {
   /** Given, a tool call's file locations become buttons. A general chat has
    *  nowhere to open them and leaves them as text. */
   onOpenLocation?: (location: ChatToolLocation) => void;
+  /** Branch the conversation here. Absent where there is nothing to branch —
+   *  an unsaved conversation, a backend that keeps no record. */
+  onFork?: (messageId: string) => void;
+  /** Re-ask this question differently, in a branch of its own. Offered on the
+   *  user's own messages only. */
+  onEdit?: (messageId: string, text: string) => void;
+  /** True while a turn is running or the conversation is not yet saved: both
+   *  actions above start a new session, which is not a thing to do underneath
+   *  an answer that is still arriving. */
+  actionsDisabled?: boolean;
 }
 
 export function MessageBubble({
@@ -180,10 +190,15 @@ export function MessageBubble({
   nowMs,
   onAnswerPermission,
   onOpenLocation,
+  onFork,
+  onEdit,
+  actionsDisabled = false,
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const [expandedToolId, setExpandedToolId] = useState<string | null>(null);
   const [thinkingOpen, setThinkingOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
   const text = messageText(message);
   const elapsed = messageElapsedLabel(message, nowMs);
   const hasThought = !isUser && message.thought.trim().length > 0;
@@ -226,7 +241,41 @@ export function MessageBubble({
           </div>
         )}
 
-        {isUser ? (
+        {isUser && editing ? (
+          <div className="acp-chat__edit">
+            <textarea
+              className="acp-chat__textarea"
+              aria-label="Edit message text"
+              value={draft}
+              rows={Math.max(2, Math.min(10, draft.split("\n").length))}
+              autoFocus
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setEditing(false);
+              }}
+            />
+            <div className="acp-chat__edit-actions">
+              <button
+                type="button"
+                className="acp-chat__button"
+                onClick={() => setEditing(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="acp-chat__button acp-chat__button--primary"
+                disabled={!draft.trim()}
+                onClick={() => {
+                  setEditing(false);
+                  onEdit?.(message.id, draft.trim());
+                }}
+              >
+                Ask in a branch
+              </button>
+            </div>
+          </div>
+        ) : isUser ? (
           <span className="acp-chat__user-text">{text}</span>
         ) : (
           <div className="acp-chat__blocks">
@@ -284,6 +333,33 @@ export function MessageBubble({
 
       <div className="acp-chat__message-actions">
         <CopyButton text={text} label={`Copy ${isUser ? "your" : "the assistant's"} message`} />
+        {isUser && onEdit && !editing && (
+          <button
+            type="button"
+            className="acp-chat__icon-button"
+            title="Ask this differently, in a branch"
+            aria-label="Edit your message"
+            disabled={actionsDisabled}
+            onClick={() => {
+              setDraft(text);
+              setEditing(true);
+            }}
+          >
+            <EditIcon size={11} />
+          </button>
+        )}
+        {onFork && (
+          <button
+            type="button"
+            className="acp-chat__icon-button"
+            title="Branch the conversation here"
+            aria-label={`Branch from ${isUser ? "your" : "the assistant's"} message`}
+            disabled={actionsDisabled || message.streaming}
+            onClick={() => onFork(message.id)}
+          >
+            <BranchIcon size={11} />
+          </button>
+        )}
       </div>
     </div>
   );

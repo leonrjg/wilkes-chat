@@ -12,6 +12,7 @@ import {
   dismissUndecided,
   emptyAssistantMessage,
   messageFromRecord,
+  messageText,
   userMessage,
   type ChatMessage,
   type ChatPermissionPrompt,
@@ -91,6 +92,19 @@ export interface ChatState {
   forgetConversation: (conversationId: string) => Promise<void>;
   setConfigOption: (configId: string, value: string) => Promise<void>;
   sendMessage: (text: string) => Promise<void>;
+  /** Branch the conversation at `messageId` into a new one and open it.
+   *
+   *  Forking *from* an assistant answer keeps that answer, so the next thing
+   *  said continues from it. Forking from a question re-asks it — which is
+   *  what `editMessage` is, with different words. */
+  forkFromMessage: (messageId: string) => Promise<void>;
+  /** Re-ask a question, differently, in a branch of its own.
+   *
+   *  A fork rather than an edit in place, because the old answer was really
+   *  given and the agent really has it in context; rewriting the transcript
+   *  under it would make the window disagree with the agent about what was
+   *  said. */
+  editMessage: (messageId: string, text: string) => Promise<void>;
   answerPermission: (
     requestId: string,
     option: ChatPermissionPrompt["options"][number] | null,
@@ -299,6 +313,54 @@ export function createChatStore(options: ChatStoreOptions): ChatStore {
         get()
           .loadConversations()
           .catch((error) => report("loading history failed", error));
+      },
+
+      forkFromMessage: async (messageId) => {
+        const { conversationId, messages, streaming, backend } = get();
+        const message = messages.find((m) => m.id === messageId);
+        // Nothing to fork from an unsaved conversation: the fork is taken from
+        // the record on disk, and a backend that keeps no record has none.
+        if (!conversationId || !message || streaming || !backend) return;
+
+        const started = await transport.forkConversation(
+          conversationId,
+          messageId,
+          message.role === "assistant",
+        );
+        closeOpenSession();
+        adopt(started, backend);
+        get()
+          .loadConversations()
+          .catch((error) => report("loading history failed", error));
+
+        // Forking from a question means asking it again — the fork excluded
+        // it, so nothing has been asked yet.
+        //
+        // Started, not awaited. Resolving this promise when the *branch* is
+        // open rather than when the answer is finished is the contract a
+        // caller can use: awaiting a whole turn here would make a click
+        // handler hang for as long as the agent talks, and `sendMessage`
+        // reports its own failures onto the message either way.
+        if (message.role === "user") void get().sendMessage(messageText(message));
+      },
+
+      editMessage: async (messageId, text) => {
+        const { conversationId, messages, streaming, backend } = get();
+        const message = messages.find((m) => m.id === messageId);
+        if (!conversationId || !message || message.role !== "user" || streaming || !backend) {
+          return;
+        }
+        const edited = text.trim();
+        if (!edited) return;
+
+        const started = await transport.forkConversation(conversationId, messageId, false);
+        closeOpenSession();
+        adopt(started, backend);
+        get()
+          .loadConversations()
+          .catch((error) => report("loading history failed", error));
+        // Started, not awaited — see `forkFromMessage`.
+        void get().sendMessage(edited);
       },
 
       newChat: async () => {

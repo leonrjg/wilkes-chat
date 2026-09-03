@@ -2,8 +2,10 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { MessageBubble } from "./MessageBubble";
 import {
+  CheckIcon,
   ClockIcon,
   CloseIcon,
+  CopyIcon,
   DownloadIcon,
   PlusIcon,
   RefreshIcon,
@@ -58,6 +60,7 @@ export function ChatPane({
   const lastTouchYRef = useRef<number | null>(null);
   const [draft, setDraft] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [copiedSessionId, setCopiedSessionId] = useState(false);
 
   const backends = useChatStore((s) => s.backends);
   const backendsLoading = useChatStore((s) => s.backendsLoading);
@@ -74,6 +77,7 @@ export function ChatPane({
   const starting = useChatStore((s) => s.starting);
   const sessionError = useChatStore((s) => s.sessionError);
   const configOptions = useChatStore((s) => s.configOptions);
+  const backendSessionId = useChatStore((s) => s.backendSessionId);
 
   const initialize = useChatStore((s) => s.initialize);
   const loadBackends = useChatStore((s) => s.loadBackends);
@@ -85,6 +89,8 @@ export function ChatPane({
   const setConfigOption = useChatStore((s) => s.setConfigOption);
   const sendMessage = useChatStore((s) => s.sendMessage);
   const answerPermission = useChatStore((s) => s.answerPermission);
+  const forkFromMessage = useChatStore((s) => s.forkFromMessage);
+  const editMessage = useChatStore((s) => s.editMessage);
   const cancel = useChatStore((s) => s.cancel);
 
   // Swallowed rather than thrown: every one of these already reports itself
@@ -181,6 +187,28 @@ export function ChatPane({
             >
               <ClockIcon />
             </button>
+            <button
+              type="button"
+              className="acp-chat__icon-button"
+              // The agent's own id for this conversation, not ours: it is what
+              // identifies the thread in the CLI's own logs and storage, which
+              // is the only place anyone would go looking with it.
+              title="Copy the agent's session id"
+              aria-label={copiedSessionId ? "Copied" : "Copy the agent's session id"}
+              disabled={!backendSessionId}
+              onClick={() => {
+                if (!backendSessionId) return;
+                navigator.clipboard
+                  ?.writeText(backendSessionId)
+                  .then(() => {
+                    setCopiedSessionId(true);
+                    window.setTimeout(() => setCopiedSessionId(false), 1200);
+                  })
+                  .catch(() => {});
+              }}
+            >
+              {copiedSessionId ? <CheckIcon /> : <CopyIcon />}
+            </button>
             {onClose && (
               <button
                 type="button"
@@ -250,7 +278,13 @@ export function ChatPane({
                       openConversation(conversation.conversation_id).catch(ignore);
                     }}
                   >
-                    <span className="acp-chat__history-title">{conversation.title}</span>
+                    <span className="acp-chat__history-title">
+                      {/* A fork carries its parent's name; without this it
+                          reads as an unrelated chat that happens to be called
+                          the same thing. */}
+                      {conversation.parent_conversation_id ? "↳ " : ""}
+                      {conversation.title}
+                    </span>
                     <span className="acp-chat__dim">
                       {formatConversationDate(conversation.updated_at)}
                     </span>
@@ -371,6 +405,18 @@ export function ChatPane({
                 answerPermission(requestId, option).catch(ignore)
               }
               onOpenLocation={onOpenLocation}
+              // Both start a fresh session from the record on disk, so both
+              // are offered only once there is a record: a backend that keeps
+              // none has nothing to branch.
+              onFork={
+                conversationId ? (id) => forkFromMessage(id).catch(ignore) : undefined
+              }
+              onEdit={
+                conversationId
+                  ? (id, edited) => editMessage(id, edited).catch(ignore)
+                  : undefined
+              }
+              actionsDisabled={streaming || starting}
             />
           ))}
           <div ref={bottomRef} />

@@ -45,6 +45,20 @@ export interface ChatTransport {
   /** Reattach to the agent's own session for a saved conversation. */
   openConversation(conversationId: string): Promise<ChatStartResult>;
 
+  /** Branch a conversation at one message into a new one, on a *fresh* agent
+   *  session — not a resume. The point of a fork is to go where the original
+   *  did not, and an agent resumed at its own last state still has the
+   *  abandoned continuation in its context.
+   *
+   *  `includeMessage` is what tells a fork from an edit: true keeps the
+   *  message and continues after it, false drops it so a rewritten one takes
+   *  its place. */
+  forkConversation(
+    conversationId: string,
+    messageId: string,
+    includeMessage: boolean,
+  ): Promise<ChatStartResult>;
+
   close(sessionId: string): Promise<void>;
 
   setConfigOption(
@@ -103,6 +117,7 @@ export const CHAT_COMMANDS = [
   "chat_forget_conversation",
   "chat_start",
   "chat_open_conversation",
+  "chat_fork_conversation",
   "chat_close",
   "chat_set_config_option",
   "chat_send",

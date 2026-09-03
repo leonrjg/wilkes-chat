@@ -69,6 +69,14 @@ export type ChatContentBlockRecord =
   | { kind: "text"; text: string }
   | { kind: "tool"; tool: ChatToolCallRecord };
 
+/** What was true when a turn was sent, so a fork of it reopens under the same
+ *  conditions rather than under today's. `host` is an opaque blob the
+ *  application writes and reads; nothing here interprets it. */
+export interface ChatTurnEnvironment {
+  config_values: ChatConfigValue[];
+  host?: unknown;
+}
+
 export interface ChatMessageRecord {
   message_id: string;
   turn_id: string | null;
@@ -76,6 +84,8 @@ export interface ChatMessageRecord {
   thought: string;
   content: ChatContentBlockRecord[];
   error: string | null;
+  /** Set on the user message that opened a turn, and nowhere else. */
+  environment?: ChatTurnEnvironment | null;
 }
 
 export interface ChatConversationRecord {
@@ -89,6 +99,19 @@ export interface ChatConversationRecord {
   last_opened_at: string;
   config_values: ChatConfigValue[];
   messages: ChatMessageRecord[];
+  /** The conversation this one was branched out of, if any. A history menu
+   *  marks these so a fork is not mistaken for an unrelated chat with a
+   *  similar name. */
+  parent_conversation_id?: string | null;
+  forked_from_message_id?: string | null;
+  branch_history_pending?: boolean;
+}
+
+/** The configuration last chosen for one agent, which a host persists so a new
+ *  chat starts where the last one left off. */
+export interface ChatBackendConfig {
+  backend: AgentBackend;
+  values: ChatConfigValue[];
 }
 
 /** One choice the agent offered for a permission request. Echoed back by

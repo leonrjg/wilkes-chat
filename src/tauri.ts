@@ -52,6 +52,13 @@ export function tauriChatTransport(): ChatTransport {
     openConversation: (conversationId: string) =>
       invoke<ChatStartResult>("chat_open_conversation", { conversationId }),
 
+    forkConversation: (conversationId: string, messageId: string, includeMessage: boolean) =>
+      invoke<ChatStartResult>("chat_fork_conversation", {
+        conversationId,
+        messageId,
+        includeMessage,
+      }),
+
     close: (sessionId: string) => invoke<void>("chat_close", { sessionId }),
 
     setConfigOption: (sessionId: string, configId: string, value: string) =>

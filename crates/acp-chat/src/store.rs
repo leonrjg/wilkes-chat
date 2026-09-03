@@ -22,11 +22,34 @@ use crate::session::{
 
 /// The on-disk format's version. Bumped when a change would make an older
 /// reader wrong rather than merely incomplete.
-const STORE_VERSION: u32 = 1;
+///
+/// Version 1 files are still read: everything version 2 added is `#[serde(default)]`,
+/// so a file written before forking existed loads with no fork, no environment
+/// and no parent — which is the truth about it. They are rewritten as 2 on the
+/// next write.
+const STORE_VERSION: u32 = 2;
+const OLDEST_READABLE_VERSION: u32 = 1;
 
 /// The longest a derived title gets. Past this the history menu is showing a
 /// paragraph, not a name.
 const TITLE_CHAR_LIMIT: usize = 80;
+
+/// What was true when a turn was sent, kept so a fork of it can be opened
+/// under the same conditions rather than under today's.
+///
+/// `config_values` is this crate's: the model and mode that answered. `host` is
+/// an opaque blob the host writes and reads and this crate only carries —
+/// whatever else an application counts as part of "the conditions" (which
+/// documents were in context, which root was being searched) lives there,
+/// because a fork that silently changed those would be answering a different
+/// question from the one being branched.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct ChatTurnEnvironment {
+    #[serde(default)]
+    pub config_values: Vec<ChatConfigValue>,
+    #[serde(default)]
+    pub host: Option<serde_json::Value>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ChatMessageRecord {
@@ -38,6 +61,10 @@ pub struct ChatMessageRecord {
     pub thought: String,
     pub content: Vec<ChatReplayContentBlock>,
     pub error: Option<String>,
+    /// Set on the user message that opened a turn, and nowhere else — it is
+    /// the only message a fork can be taken *from* with conditions attached.
+    #[serde(default)]
+    pub environment: Option<ChatTurnEnvironment>,
 }
 
 impl ChatMessageRecord {
@@ -49,6 +76,21 @@ impl ChatMessageRecord {
             thought: String::new(),
             content: vec![ChatReplayContentBlock::Text { text }],
             error: None,
+            environment: None,
+        }
+    }
+
+    /// The same, with the conditions the turn was sent under attached — what a
+    /// fork of this message is reopened with.
+    pub fn user_in(
+        message_id: String,
+        turn_id: String,
+        text: String,
+        environment: ChatTurnEnvironment,
+    ) -> Self {
+        Self {
+            environment: Some(environment),
+            ..Self::user(message_id, turn_id, text)
         }
     }
 
@@ -61,6 +103,7 @@ impl ChatMessageRecord {
             thought: String::new(),
             content: Vec::new(),
             error: None,
+            environment: None,
         }
     }
 
@@ -91,6 +134,18 @@ pub struct ChatConversationRecord {
     pub last_opened_at: String,
     pub config_values: Vec<ChatConfigValue>,
     pub messages: Vec<ChatMessageRecord>,
+    /// The conversation this one was branched out of, if any.
+    #[serde(default)]
+    pub parent_conversation_id: Option<String>,
+    #[serde(default)]
+    pub forked_from_message_id: Option<String>,
+    /// A fork opens a *new* agent session, which knows nothing of the dialogue
+    /// above the branch point. This says that dialogue still has to be handed
+    /// over — see [`branch_history_text`] and
+    /// [`crate::session::ChatSession::set_prelude`]. Cleared once the first
+    /// turn has carried it.
+    #[serde(default)]
+    pub branch_history_pending: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -156,10 +211,136 @@ pub fn create_conversation(
         last_opened_at: now,
         config_values: config_values_from_options(config_options),
         messages: Vec::new(),
+        parent_conversation_id: None,
+        forked_from_message_id: None,
+        branch_history_pending: false,
     };
 
     mutate_store(data_dir, |store| store.conversations.push(record.clone()))?;
     Ok(Some(record))
+}
+
+/// Branch a conversation at one message into a new one.
+///
+/// The caller has already opened a *fresh* agent session for it — forking is
+/// not `session/load`, because the point is to take the thread somewhere the
+/// original did not go, and an agent resumed at its own last state has the
+/// abandoned continuation still in its context.
+///
+/// `include_message` is what tells a fork from an edit. Forking *from* an
+/// assistant answer keeps that answer and continues after it; re-asking a user
+/// message drops it, so the new session's first turn is the rewritten question
+/// with the same history behind it.
+///
+/// The new record carries `branch_history_pending`, because the fresh session
+/// has none of the dialogue the user can still see above the branch point.
+pub fn create_fork_conversation(
+    data_dir: &Path,
+    source_conversation_id: &str,
+    forked_from_message_id: &str,
+    include_message: bool,
+    backend_session_id: String,
+) -> anyhow::Result<ChatConversationRecord> {
+    let source = get_conversation(data_dir, source_conversation_id)?;
+    let index = source
+        .messages
+        .iter()
+        .position(|message| message.message_id == forked_from_message_id)
+        .ok_or_else(|| anyhow::anyhow!("chat message not found: {forked_from_message_id}"))?;
+    let prefix_len = if include_message { index + 1 } else { index };
+    let environment = environment_at_message(&source, forked_from_message_id);
+    let now = now_string();
+
+    let record = ChatConversationRecord {
+        conversation_id: uuid::Uuid::new_v4().to_string(),
+        backend: source.backend,
+        backend_session_id,
+        // The same directory, deliberately: a fork asks the same question
+        // differently, and moving the agent's root would change the world it
+        // is being asked about as well.
+        cwd: source.cwd,
+        title: format!("Fork of {}", source.title),
+        created_at: now.clone(),
+        updated_at: now.clone(),
+        last_opened_at: now,
+        config_values: environment.config_values,
+        messages: source.messages[..prefix_len].to_vec(),
+        parent_conversation_id: Some(source_conversation_id.to_string()),
+        forked_from_message_id: Some(forked_from_message_id.to_string()),
+        // Nothing above the branch point means nothing to hand over.
+        branch_history_pending: prefix_len > 0,
+    };
+    mutate_store(data_dir, |store| store.conversations.push(record.clone()))?;
+    Ok(record)
+}
+
+/// The conditions in force at a message: its own, or the most recent ones
+/// before it.
+///
+/// Searching backwards rather than requiring the message to carry them,
+/// because only the user message that opened a turn does — an assistant answer
+/// was produced under whatever was in force when the question was asked, which
+/// is the entry above it.
+///
+/// A conversation with no environment anywhere (one written before turns
+/// recorded them) yields the default rather than an error: a fork of it opens
+/// under the agent's own defaults, which is worse than exact and much better
+/// than refusing to fork.
+pub fn environment_at_message(
+    conversation: &ChatConversationRecord,
+    message_id: &str,
+) -> ChatTurnEnvironment {
+    let Some(index) = conversation
+        .messages
+        .iter()
+        .position(|message| message.message_id == message_id)
+    else {
+        return ChatTurnEnvironment::default();
+    };
+    conversation.messages[..=index]
+        .iter()
+        .rev()
+        .find_map(|message| message.environment.clone())
+        .unwrap_or_default()
+}
+
+/// The dialogue above a branch point, rendered for the fresh session that did
+/// not live through it.
+///
+/// Text only. Tool calls are left out because they are the *old* session's
+/// work — a transcript that listed them would be telling the new agent it had
+/// already read files it has not read.
+pub fn branch_history_text(messages: &[ChatMessageRecord]) -> String {
+    messages
+        .iter()
+        .filter_map(|message| {
+            let text = message.text();
+            if text.trim().is_empty() {
+                return None;
+            }
+            let speaker = if message.role == "user" {
+                "User"
+            } else {
+                "Assistant"
+            };
+            Some(format!("{speaker}: {text}"))
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
+/// The branch history has been handed over; stop handing it over.
+pub fn mark_branch_history_seeded(data_dir: &Path, conversation_id: &str) -> anyhow::Result<()> {
+    mutate_store(data_dir, |store| {
+        if let Some(record) = store
+            .conversations
+            .iter_mut()
+            .find(|record| record.conversation_id == conversation_id)
+        {
+            record.branch_history_pending = false;
+            record.updated_at = now_string();
+        }
+    })
 }
 
 /// Mark a conversation as just used, and give it a name if it has not earned
@@ -249,6 +430,7 @@ pub fn records_from_replay(messages: Vec<ChatReplayMessage>) -> Vec<ChatMessageR
             thought: message.thought,
             content: message.content,
             error: None,
+            environment: None,
         })
         .collect()
 }
@@ -268,8 +450,8 @@ fn read_store(data_dir: &Path) -> anyhow::Result<ChatConversationFile> {
     }
     let store: ChatConversationFile = serde_json::from_str(&text)?;
     anyhow::ensure!(
-        store.version == STORE_VERSION,
-        "unsupported chat conversation version: {} (this build reads {STORE_VERSION})",
+        (OLDEST_READABLE_VERSION..=STORE_VERSION).contains(&store.version),
+        "unsupported chat conversation version: {} (this build reads {OLDEST_READABLE_VERSION}–{STORE_VERSION})",
         store.version
     );
     Ok(store)
@@ -283,6 +465,14 @@ fn read_store(data_dir: &Path) -> anyhow::Result<ChatConversationFile> {
 /// than the one being written.
 fn write_store(data_dir: &Path, store: &ChatConversationFile) -> anyhow::Result<()> {
     std::fs::create_dir_all(data_dir)?;
+    // Whatever version was read, what is written is this one: the fields an
+    // older file lacked have taken their defaults by now, so calling it the
+    // old version would be claiming it is still readable by a reader that
+    // would not understand what is in it.
+    let store = &ChatConversationFile {
+        version: STORE_VERSION,
+        conversations: store.conversations.clone(),
+    };
     let path = conversation_path(data_dir);
     let tmp_path = path.with_extension("json.tmp");
     let text = serde_json::to_string_pretty(store)?;
@@ -478,6 +668,267 @@ mod tests {
         let read = get_conversation(dir.path(), &created.conversation_id).unwrap();
         assert_eq!(read.messages.len(), 1);
         assert_eq!(read.messages[0].text(), "hello");
+    }
+
+    fn conversation_with(dir: &Path, messages: Vec<ChatMessageRecord>) -> ChatConversationRecord {
+        let created = create_conversation(
+            dir,
+            AgentBackend::ClaudeCode,
+            Path::new("/tmp/work"),
+            "s1".to_string(),
+            &[],
+        )
+        .unwrap()
+        .unwrap();
+        replace_conversation_messages(dir, &created.conversation_id, messages).unwrap();
+        get_conversation(dir, &created.conversation_id).unwrap()
+    }
+
+    fn thread() -> Vec<ChatMessageRecord> {
+        vec![
+            ChatMessageRecord::user_in(
+                "m1".to_string(),
+                "t1".to_string(),
+                "first question".to_string(),
+                ChatTurnEnvironment {
+                    config_values: vec![ChatConfigValue {
+                        id: "model".to_string(),
+                        value: "sonnet".to_string(),
+                    }],
+                    host: Some(serde_json::json!({ "root": "/books" })),
+                },
+            ),
+            ChatMessageRecord {
+                content: vec![ChatReplayContentBlock::Text {
+                    text: "first answer".to_string(),
+                }],
+                ..ChatMessageRecord::assistant_placeholder("t1".to_string())
+            },
+            ChatMessageRecord::user_in(
+                "m3".to_string(),
+                "t2".to_string(),
+                "second question".to_string(),
+                ChatTurnEnvironment {
+                    config_values: vec![ChatConfigValue {
+                        id: "model".to_string(),
+                        value: "opus".to_string(),
+                    }],
+                    host: None,
+                },
+            ),
+        ]
+    }
+
+    #[test]
+    fn forking_from_an_answer_keeps_it_and_drops_what_came_after() {
+        let dir = tempdir().unwrap();
+        let source = conversation_with(dir.path(), thread());
+
+        let fork = create_fork_conversation(
+            dir.path(),
+            &source.conversation_id,
+            "t1",
+            true,
+            "s2".to_string(),
+        )
+        .unwrap();
+
+        assert_eq!(fork.messages.len(), 2);
+        assert_eq!(fork.messages[1].text(), "first answer");
+        assert_eq!(fork.parent_conversation_id.as_deref(), Some(source.conversation_id.as_str()));
+        assert_eq!(fork.forked_from_message_id.as_deref(), Some("t1"));
+        assert!(fork.branch_history_pending);
+        assert_eq!(fork.backend_session_id, "s2", "a fork gets a fresh agent session");
+    }
+
+    #[test]
+    fn re_asking_a_question_drops_it_so_the_new_one_takes_its_place() {
+        let dir = tempdir().unwrap();
+        let source = conversation_with(dir.path(), thread());
+
+        let fork = create_fork_conversation(
+            dir.path(),
+            &source.conversation_id,
+            "m3",
+            false,
+            "s2".to_string(),
+        )
+        .unwrap();
+
+        assert_eq!(fork.messages.len(), 2);
+        assert_eq!(fork.messages.last().unwrap().text(), "first answer");
+    }
+
+    #[test]
+    fn a_fork_opens_under_the_conditions_that_message_was_sent_under() {
+        // Not today's: the second question was asked on a different model, and
+        // a fork of the first that quietly used it would be answering a
+        // different question from the one being branched.
+        let dir = tempdir().unwrap();
+        let source = conversation_with(dir.path(), thread());
+
+        let fork = create_fork_conversation(
+            dir.path(),
+            &source.conversation_id,
+            "t1",
+            true,
+            "s2".to_string(),
+        )
+        .unwrap();
+
+        assert_eq!(fork.config_values[0].value, "sonnet");
+    }
+
+    #[test]
+    fn an_answer_inherits_the_conditions_of_the_question_above_it() {
+        // Only a user message carries an environment; forking from an answer
+        // has to look back to the turn that produced it.
+        let dir = tempdir().unwrap();
+        let source = conversation_with(dir.path(), thread());
+
+        let at_answer = environment_at_message(&source, "t1");
+        assert_eq!(at_answer.config_values[0].value, "sonnet");
+        assert_eq!(at_answer.host, Some(serde_json::json!({ "root": "/books" })));
+    }
+
+    #[test]
+    fn a_conversation_with_no_recorded_conditions_still_forks() {
+        // Written before turns recorded them. Opening under the agent's own
+        // defaults is worse than exact and much better than refusing.
+        let dir = tempdir().unwrap();
+        let source = conversation_with(
+            dir.path(),
+            vec![ChatMessageRecord::user(
+                "m1".to_string(),
+                "t1".to_string(),
+                "hello".to_string(),
+            )],
+        );
+
+        assert_eq!(environment_at_message(&source, "m1"), ChatTurnEnvironment::default());
+        assert!(create_fork_conversation(
+            dir.path(),
+            &source.conversation_id,
+            "m1",
+            true,
+            "s2".to_string()
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn forking_from_the_first_message_hands_over_no_history() {
+        let dir = tempdir().unwrap();
+        let source = conversation_with(dir.path(), thread());
+
+        let fork = create_fork_conversation(
+            dir.path(),
+            &source.conversation_id,
+            "m1",
+            false,
+            "s2".to_string(),
+        )
+        .unwrap();
+
+        assert!(fork.messages.is_empty());
+        assert!(
+            !fork.branch_history_pending,
+            "there is nothing above the branch point to hand over"
+        );
+    }
+
+    #[test]
+    fn forking_at_a_message_that_is_not_there_is_an_error() {
+        let dir = tempdir().unwrap();
+        let source = conversation_with(dir.path(), thread());
+
+        let err = create_fork_conversation(
+            dir.path(),
+            &source.conversation_id,
+            "nope",
+            true,
+            "s2".to_string(),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("nope"), "{err}");
+    }
+
+    #[test]
+    fn the_branch_history_reads_as_dialogue_and_omits_the_tools() {
+        // The tool calls were the *old* session's work; listing them would
+        // tell the new agent it had already read files it has not read.
+        let messages = vec![
+            ChatMessageRecord::user("m1".to_string(), "t1".to_string(), "hi".to_string()),
+            ChatMessageRecord {
+                content: vec![
+                    ChatReplayContentBlock::Tool {
+                        tool: crate::session::ChatReplayToolCall {
+                            tool_call_id: "c1".to_string(),
+                            title: "Read".to_string(),
+                            status: "completed".to_string(),
+                            locations: Vec::new(),
+                            content: Vec::new(),
+                            raw_input: None,
+                            raw_output: None,
+                        },
+                    },
+                    ChatReplayContentBlock::Text {
+                        text: "hello".to_string(),
+                    },
+                ],
+                ..ChatMessageRecord::assistant_placeholder("t1".to_string())
+            },
+        ];
+
+        let history = branch_history_text(&messages);
+        assert_eq!(history, "User: hi\n\nAssistant: hello");
+        assert!(!history.contains("Read"));
+    }
+
+    #[test]
+    fn seeding_the_branch_history_happens_once() {
+        let dir = tempdir().unwrap();
+        let source = conversation_with(dir.path(), thread());
+        let fork = create_fork_conversation(
+            dir.path(),
+            &source.conversation_id,
+            "t1",
+            true,
+            "s2".to_string(),
+        )
+        .unwrap();
+        assert!(fork.branch_history_pending);
+
+        mark_branch_history_seeded(dir.path(), &fork.conversation_id).unwrap();
+        let after = get_conversation(dir.path(), &fork.conversation_id).unwrap();
+        assert!(!after.branch_history_pending);
+    }
+
+    #[test]
+    fn a_file_written_before_forking_existed_still_opens() {
+        // Version 1 had no environment, no parent and no pending history. It
+        // is read with those at their defaults and rewritten as version 2.
+        let dir = tempdir().unwrap();
+        std::fs::write(
+            conversation_path(dir.path()),
+            r#"{"version":1,"conversations":[{
+                "conversation_id":"c1","backend":"ClaudeCode","backend_session_id":"s1",
+                "cwd":"/tmp","title":"Old chat","created_at":"2026-09-02T00:00:00Z",
+                "updated_at":"2026-09-02T00:00:00Z","last_opened_at":"2026-09-02T00:00:00Z",
+                "config_values":[],"messages":[{"message_id":"m1","turn_id":null,"role":"user",
+                "thought":"","content":[{"kind":"text","text":"hello"}],"error":null}]}]}"#,
+        )
+        .unwrap();
+
+        let read = get_conversation(dir.path(), "c1").unwrap();
+        assert_eq!(read.title, "Old chat");
+        assert!(read.parent_conversation_id.is_none());
+        assert!(read.messages[0].environment.is_none());
+
+        touch_conversation(dir.path(), "c1", None).unwrap();
+        let text = std::fs::read_to_string(conversation_path(dir.path())).unwrap();
+        assert!(text.contains("\"version\": 2"), "rewritten at the current version");
     }
 
     #[test]
