@@ -36,6 +36,12 @@
   --acp-font-size: var(--acp-chat-font-size, 13px);
   --acp-font-size-small: var(--acp-chat-font-size-small, 11px);
   --acp-mono: var(--acp-chat-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  /* How wide a bubble is allowed to get. A pane docked beside a document is
+     narrow enough that this never binds; a chat given a whole window is not,
+     and prose set the full width of one is prose nobody's eye can track back
+     to the start of. `min` rather than a flat measure so the narrow case is
+     still the pane's width and not a column floating in it. */
+  --acp-measure: var(--acp-chat-measure, min(100%, 68ch));
 
   display: flex;
   flex-direction: column;
@@ -378,7 +384,7 @@
 }
 
 .acp-chat__bubble {
-  max-width: 100%;
+  max-width: var(--acp-measure);
   padding: 7px 10px;
   border-radius: var(--acp-radius);
   background: var(--acp-bg-bubble);

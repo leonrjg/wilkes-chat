@@ -42,13 +42,21 @@ export interface FakeTransportOptions {
   startFails?: string;
 }
 
+/** The names these agents go by, so a preview built on the fake reads like the
+ *  real thing rather than showing the wire's own spelling. */
+const LABELS: Record<AgentBackend, string> = {
+  ClaudeCode: "Claude Code",
+  Codex: "Codex",
+  Nanocoder: "Nanocoder",
+};
+
 export function backendStatus(
   backend: AgentBackend,
   overrides: Partial<BackendStatus> = {},
 ): BackendStatus {
   return {
     backend,
-    label: backend,
+    label: LABELS[backend],
     available: true,
     auth_note: `Log in to ${backend}`,
     installable: false,

@@ -130,6 +130,18 @@ const useChat = createChatStore({ transport: tauriChatTransport() });
 <ChatPane store={useChat} />
 ```
 
+**One React.** A host that *links* this package rather than installing it from
+a tag gets a second React — the one this package keeps to typecheck and test
+itself — and two Reacts in one tree means the second one's hook dispatcher is
+null. Every hook in the pane then throws `Cannot read properties of null
+(reading 'useCallback')`, which reads as a bug in the pane and is not one:
+
+```ts
+// vite.config.ts
+resolve: { dedupe: ["react", "react-dom", "zustand"] },
+server: { fs: { allow: [".", "../../acp-chat"] } },
+```
+
 `createChatStore` is a factory rather than a store because the transport is
 injected. That is what makes the browser preview and the test suite real:
 `@leonrjg/acp-chat/testing` exports `createFakeTransport`, which drives every
