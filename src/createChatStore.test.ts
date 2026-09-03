@@ -196,6 +196,39 @@ describe("a turn", () => {
     expect(store.getState().conversationId).toBeTruthy();
   });
 
+  it("puts the conversation the first turn minted into the history", async () => {
+    // The id a turn reports has to name something the history can open, or
+    // every reader of it — the menu, a fork — points at nothing.
+    const sent = store.getState().sendMessage("What is a monad?");
+    transport.lastTurn().emit({ kind: "text", delta: "A monoid." });
+    transport.lastTurn().finish();
+    await sent;
+    await store.getState().loadConversations();
+
+    const conversationId = store.getState().conversationId;
+    const listed = store
+      .getState()
+      .conversations.find((c) => c.conversation_id === conversationId);
+    expect(listed, "the turn's conversation is in the history").toBeTruthy();
+    expect(listed!.title).toBe("What is a monad?");
+    expect(listed!.messages).toHaveLength(2);
+  });
+
+  it("keeps a second turn in the same conversation", async () => {
+    const first = store.getState().sendMessage("one");
+    transport.lastTurn().finish();
+    await first;
+    const conversationId = store.getState().conversationId;
+
+    const second = store.getState().sendMessage("two");
+    transport.lastTurn().finish();
+    await second;
+
+    expect(store.getState().conversationId).toBe(conversationId);
+    await store.getState().loadConversations();
+    expect(store.getState().conversations).toHaveLength(1);
+  });
+
   it("stops a running turn on cancel", async () => {
     const sent = store.getState().sendMessage("hello");
     const turnId = store.getState().currentTurnId;

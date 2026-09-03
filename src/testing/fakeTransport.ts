@@ -16,10 +16,15 @@ import type {
   ChatConfigOption,
   ChatConversationRecord,
   ChatDone,
+  ChatMessageRecord,
   ChatSendResult,
   ChatStartResult,
   ChatUpdate,
 } from "../types";
+
+/** One fixed timestamp. A fake that used the clock would make a snapshot test
+ *  of the history menu fail once a day at midnight. */
+const STAMP = "2026-09-01T10:00:00Z";
 
 export interface FakeTurn {
   sessionId: string;
@@ -94,11 +99,76 @@ export function createFakeTransport(options: FakeTransportOptions = {}): FakeTra
   const cancelled: Array<{ sessionId: string; turnId: string }> = [];
   const answered: Array<{ requestId: string; optionId: string | null }> = [];
   const forked: FakeTransport["forked"] = [];
+  /** Which conversation each session is writing into, so a second turn lands
+   *  in the same one rather than minting another. */
+  const conversationForSession = new Map<string, string>();
   const errorHandlers = new Map<string, (message: string) => void>();
   const configHandlers = new Map<string, (options: ChatConfigOption[]) => void>();
 
   let nextId = 0;
   const id = (prefix: string) => `${prefix}-${++nextId}`;
+
+  /** Append a finished turn to this session's conversation, creating it on the
+   *  first turn the way the real backend does. Returns its id. */
+  function recordTurn(
+    sessionId: string,
+    userMessageId: string,
+    turnId: string,
+    asked: string,
+    answered: string,
+  ): string {
+    const conversationId = conversationForSession.get(sessionId) ?? id("conversation");
+    conversationForSession.set(sessionId, conversationId);
+
+    const turnMessages: ChatMessageRecord[] = [
+      {
+        message_id: userMessageId,
+        turn_id: turnId,
+        role: "user",
+        thought: "",
+        content: [{ kind: "text", text: asked }],
+        error: null,
+        environment: { config_values: [] },
+      },
+      {
+        message_id: turnId,
+        turn_id: turnId,
+        role: "assistant",
+        thought: "",
+        content: answered ? [{ kind: "text", text: answered }] : [],
+        error: null,
+      },
+    ];
+
+    const existing = conversations.find((c) => c.conversation_id === conversationId);
+    if (existing) {
+      conversations = conversations.map((c) =>
+        c.conversation_id === conversationId
+          ? { ...c, messages: [...c.messages, ...turnMessages], updated_at: c.updated_at }
+          : c,
+      );
+      return conversationId;
+    }
+
+    conversations = [
+      {
+        conversation_id: conversationId,
+        backend: backends[0]?.backend ?? "ClaudeCode",
+        backend_session_id: `backend-${sessionId}`,
+        cwd: "/tmp/chat",
+        // The real store names a conversation after the first thing said in
+        // it, and keeps that name.
+        title: asked.split(/\s+/).join(" ").slice(0, 80) || "Untitled chat",
+        created_at: STAMP,
+        updated_at: STAMP,
+        last_opened_at: STAMP,
+        config_values: [],
+        messages: turnMessages,
+      },
+      ...conversations,
+    ];
+    return conversationId;
+  }
 
   function started(sessionId: string, conversationId: string | null): ChatStartResult {
     return {
@@ -173,8 +243,12 @@ export function createFakeTransport(options: FakeTransportOptions = {}): FakeTra
       };
       conversations = [fork, ...conversations];
       forked.push({ conversationId, messageId, includeMessage });
+      const sessionId = id("session");
+      // The new session writes into the fork, not into a conversation of its
+      // own — the same as the real one, which was handed the fork's record.
+      conversationForSession.set(sessionId, fork.conversation_id);
       return {
-        ...started(id("session"), fork.conversation_id),
+        ...started(sessionId, fork.conversation_id),
         messages: fork.messages,
       };
     },
@@ -194,17 +268,25 @@ export function createFakeTransport(options: FakeTransportOptions = {}): FakeTra
 
     send: (sessionId, turnId, userMessageId, text, onUpdate, onDone) =>
       new Promise<ChatSendResult>((resolve, reject) => {
+        // What the answer said, so the turn can be written into the fake's own
+        // history when it ends. Without this the fake reports a conversation
+        // id it does not hold, and every reader of that id — the history menu,
+        // a fork — is looking for something that was never there.
+        let answered = "";
         const turn: FakeTurn = {
           sessionId,
           turnId,
           userMessageId,
           text,
-          emit: onUpdate,
+          emit: (update) => {
+            if (update.kind === "text") answered += update.delta;
+            onUpdate(update);
+          },
           finish: (stopReason = "end_turn") => {
             const done: ChatDone = { stop_reason: stopReason };
             onDone(done);
             turns.splice(turns.indexOf(turn), 1);
-            resolve({ conversation_id: `conversation-for-${sessionId}` });
+            resolve({ conversation_id: recordTurn(sessionId, userMessageId, turnId, text, answered) });
           },
           fail: (message) => {
             turns.splice(turns.indexOf(turn), 1);

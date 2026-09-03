@@ -190,18 +190,34 @@ There is no virtualizer. Wilkes' pane had one, and most of its complexity was
 compensating for the way the virtualizer's own scroll correction fights the
 rule above. A conversation is not a document.
 
-### What was left behind
+### Branching a conversation
 
-Deliberate omissions, not gaps to be quietly filled:
+Any message can be branched from, and any question can be re-asked
+differently. Both are the same operation — `create_fork_conversation` with the
+message included or excluded — and both open a **new** agent session rather
+than resuming the old one: the point of a branch is to go where the original
+did not, and an agent reattached to its own last state still has the abandoned
+continuation in its context.
+
+Which means the new session has none of the dialogue the user can still see
+above the branch point, and that is what `set_prelude` is for: the transcript
+is rendered by `branch_history_text`, handed over once, and then spent. Once,
+not every turn — after the first answer the agent has its own memory of the
+thread, and re-sending a transcript that only grows would spend the context
+window on it.
+
+A branch reopens under the conditions its message was sent under, not today's:
+`ChatTurnEnvironment` carries the config values that answered, plus an opaque
+`host` blob this crate stores and never reads. That blob is where an
+application's own conditions go — which documents were in context, which root
+was being searched — because a fork that silently changed those would be
+answering a different question from the one being branched.
+
+### What is not here
 
 - **Wilkes' MCP server, readers and search** stayed in Wilkes. They are the
   application, and they now reach a session through `ChatHost` like anything
   else would.
-- **Forking and editing a message.** Wilkes forks a conversation from any
-  message and re-asks an edited one, carrying a rendered branch history into
-  the new session. It is a good feature and it is not general: it rests on a
-  per-turn environment record that only means something to a host with an
-  environment worth recording.
-- **Wilkes still has its own copy.** This extraction does not modify Wilkes;
-  adopting it there is a separate change, and it is the one that turns two
-  copies back into one.
+- **Wilkes still has its own copy of the chat.** This extraction does not
+  modify Wilkes; adopting it there is a separate change, and it is the one
+  that turns two copies back into one.
