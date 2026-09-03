@@ -1,4 +1,4 @@
-## acp-chat (lib)
+## wilkes-chat (lib)
 
 The chat that talks to a coding agent over [ACP](https://agentclientprotocol.com),
 extracted from [Wilkes](https://github.com/leonrjg/Wilkes) so it is not one
@@ -6,7 +6,7 @@ application's feature. Two halves of one contract, shipped together:
 
 | | |
 | --- | --- |
-| `crates/acp-chat` | the Rust crate: backends, the session, conversations on disk |
+| `crates/wilkes-chat` | the Rust crate: backends, the session, conversations on disk |
 | `src` | the npm package: the store, the pane, and the Tauri transport between them |
 
 They are in one repository because they are one thing. The wire format is
@@ -91,13 +91,13 @@ being one.
 unpublished:
 
 ```toml
-acp-chat = { path = "../acp-chat/crates/acp-chat" }
+wilkes-chat = { path = "../wilkes-chat/crates/wilkes-chat" }
 ```
 
 A session, in full:
 
 ```rust
-let spawned = acp_chat::session::spawn(
+let spawned = wilkes_chat::session::spawn(
     SpawnOptions::new(AgentBackend::ClaudeCode, chat_dir).host(my_host),
 ).await?;
 
@@ -114,16 +114,16 @@ and does nothing else to it.
 **TypeScript.**
 
 ```
-npm install github:leonrjg/acp-chat#v0.1.0
+npm install github:leonrjg/wilkes-chat#v0.1.0
 ```
 
 `react`, `react-dom` and `zustand` are peer dependencies; `@tauri-apps/api` is
 an optional one, needed only if you import `/tauri`.
 
 ```tsx
-import { ChatPane, createChatStore } from "@leonrjg/acp-chat";
-import { tauriChatTransport } from "@leonrjg/acp-chat/tauri";
-import "@leonrjg/acp-chat/chat.css";
+import { ChatPane, createChatStore } from "@leonrjg/wilkes-chat";
+import { tauriChatTransport } from "@leonrjg/wilkes-chat/tauri";
+import "@leonrjg/wilkes-chat/chat.css";
 
 const useChat = createChatStore({ transport: tauriChatTransport() });
 
@@ -139,12 +139,12 @@ null. Every hook in the pane then throws `Cannot read properties of null
 ```ts
 // vite.config.ts
 resolve: { dedupe: ["react", "react-dom", "zustand"] },
-server: { fs: { allow: [".", "../../acp-chat"] } },
+server: { fs: { allow: [".", "../../wilkes-chat"] } },
 ```
 
 `createChatStore` is a factory rather than a store because the transport is
 injected. That is what makes the browser preview and the test suite real:
-`@leonrjg/acp-chat/testing` exports `createFakeTransport`, which drives every
+`@leonrjg/wilkes-chat/testing` exports `createFakeTransport`, which drives every
 state a live agent reaches on its own schedule — a permission request nobody
 answers, an adapter that will not install, a subprocess that dies between
 turns.
@@ -162,12 +162,12 @@ and size reads a custom property, so an application that defines none still
 gets a finished pane, and one that defines some gets its own:
 
 ```css
-@import "@leonrjg/acp-chat/chat.css";
+@import "@leonrjg/wilkes-chat/chat.css";
 
-.acp-chat {
-  --acp-chat-accent: var(--accent-9);
-  --acp-chat-border: var(--gray-a6);
-  --acp-chat-bg-bubble: var(--gray-a2);
+.wilkes-chat {
+  --wilkes-chat-accent: var(--accent-9);
+  --wilkes-chat-border: var(--gray-a6);
+  --wilkes-chat-bg-bubble: var(--gray-a2);
 }
 ```
 

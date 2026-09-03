@@ -13,7 +13,7 @@ import type {
  *
  *  Everything in this package that is not a pixel goes through this interface,
  *  and nothing in it knows what carries the calls. A desktop host implements it
- *  over IPC (`@leonrjg/acp-chat/tauri` is that implementation); a test or a
+ *  over IPC (`@leonrjg/wilkes-chat/tauri` is that implementation); a test or a
  *  browser preview implements it with a fake and gets the same store, the same
  *  pane and the same states, including the ones that are hard to reach on
  *  purpose — a backend that will not install, a permission request nobody

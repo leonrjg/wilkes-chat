@@ -3,7 +3,7 @@
  * Every colour, radius and size below reads a custom property with a fallback,
  * so an application that defines none of them still gets a finished pane, and
  * one that defines some gets its own. Redefine the tokens under a selector of
- * your own (`.acp-chat`, `:root`, a theme class) — do not fork the rules.
+ * your own (`.wilkes-chat`, `:root`, a theme class) — do not fork the rules.
  *
  * There are no utility classes here on purpose: the two applications this came
  * out of use different design systems, and a pane written in either one's
@@ -11,37 +11,37 @@
  *
  * Import this before your own tokens so yours win the cascade. */
 
-.acp-chat {
+.wilkes-chat {
   /* Surfaces */
-  --acp-bg: var(--acp-chat-bg, transparent);
-  --acp-bg-raised: var(--acp-chat-bg-raised, rgba(127, 127, 127, 0.08));
-  --acp-bg-bubble: var(--acp-chat-bg-bubble, rgba(127, 127, 127, 0.06));
-  --acp-bg-user: var(--acp-chat-bg-user, rgba(127, 127, 127, 0.14));
-  --acp-border: var(--acp-chat-border, rgba(127, 127, 127, 0.28));
+  --acp-bg: var(--wilkes-chat-bg, transparent);
+  --acp-bg-raised: var(--wilkes-chat-bg-raised, rgba(127, 127, 127, 0.08));
+  --acp-bg-bubble: var(--wilkes-chat-bg-bubble, rgba(127, 127, 127, 0.06));
+  --acp-bg-user: var(--wilkes-chat-bg-user, rgba(127, 127, 127, 0.14));
+  --acp-border: var(--wilkes-chat-border, rgba(127, 127, 127, 0.28));
 
   /* Ink */
-  --acp-text: var(--acp-chat-text, inherit);
-  --acp-text-muted: var(--acp-chat-text-muted, rgba(127, 127, 127, 0.95));
-  --acp-text-dim: var(--acp-chat-text-dim, rgba(127, 127, 127, 0.75));
-  --acp-accent: var(--acp-chat-accent, #3b82f6);
-  --acp-accent-text: var(--acp-chat-accent-text, #ffffff);
-  --acp-danger: var(--acp-chat-danger, #dc2626);
-  --acp-added: var(--acp-chat-added, #16a34a);
-  --acp-removed: var(--acp-chat-removed, #dc2626);
+  --acp-text: var(--wilkes-chat-text, inherit);
+  --acp-text-muted: var(--wilkes-chat-text-muted, rgba(127, 127, 127, 0.95));
+  --acp-text-dim: var(--wilkes-chat-text-dim, rgba(127, 127, 127, 0.75));
+  --acp-accent: var(--wilkes-chat-accent, #3b82f6);
+  --acp-accent-text: var(--wilkes-chat-accent-text, #ffffff);
+  --acp-danger: var(--wilkes-chat-danger, #dc2626);
+  --acp-added: var(--wilkes-chat-added, #16a34a);
+  --acp-removed: var(--wilkes-chat-removed, #dc2626);
 
   /* Metrics */
-  --acp-radius: var(--acp-chat-radius, 6px);
-  --acp-gap: var(--acp-chat-gap, 8px);
-  --acp-font: var(--acp-chat-font, inherit);
-  --acp-font-size: var(--acp-chat-font-size, 13px);
-  --acp-font-size-small: var(--acp-chat-font-size-small, 11px);
-  --acp-mono: var(--acp-chat-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  --acp-radius: var(--wilkes-chat-radius, 6px);
+  --acp-gap: var(--wilkes-chat-gap, 8px);
+  --acp-font: var(--wilkes-chat-font, inherit);
+  --acp-font-size: var(--wilkes-chat-font-size, 13px);
+  --acp-font-size-small: var(--wilkes-chat-font-size-small, 11px);
+  --acp-mono: var(--wilkes-chat-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   /* How wide a bubble is allowed to get. A pane docked beside a document is
      narrow enough that this never binds; a chat given a whole window is not,
      and prose set the full width of one is prose nobody's eye can track back
      to the start of. `min` rather than a flat measure so the narrow case is
      still the pane's width and not a column floating in it. */
-  --acp-measure: var(--acp-chat-measure, min(100%, 68ch));
+  --acp-measure: var(--wilkes-chat-measure, min(100%, 68ch));
 
   display: flex;
   flex-direction: column;
@@ -53,7 +53,7 @@
   font-size: var(--acp-font-size);
 }
 
-.acp-chat__visually-hidden {
+.wilkes-chat__visually-hidden {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -67,7 +67,7 @@
 
 /* ── Header ─────────────────────────────────────────────────────────────── */
 
-.acp-chat__header {
+.wilkes-chat__header {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -75,21 +75,21 @@
   border-bottom: 1px solid var(--acp-border);
 }
 
-.acp-chat__header-row {
+.wilkes-chat__header-row {
   display: flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
 }
 
-.acp-chat__header-actions {
+.wilkes-chat__header-actions {
   display: flex;
   align-items: center;
   gap: 2px;
   margin-left: auto;
 }
 
-.acp-chat__status-dot {
+.wilkes-chat__status-dot {
   width: 6px;
   height: 6px;
   flex: none;
@@ -97,11 +97,11 @@
   background: var(--acp-text-dim);
 }
 
-.acp-chat__status-dot--on {
+.wilkes-chat__status-dot--on {
   background: var(--acp-added);
 }
 
-.acp-chat__select {
+.wilkes-chat__select {
   min-width: 0;
   max-width: 100%;
   padding: 3px 4px;
@@ -113,27 +113,27 @@
   border-radius: var(--acp-radius);
 }
 
-.acp-chat__select:hover:not(:disabled) {
+.wilkes-chat__select:hover:not(:disabled) {
   border-color: var(--acp-border);
   background: var(--acp-bg-raised);
 }
 
-.acp-chat__select:disabled {
+.wilkes-chat__select:disabled {
   opacity: 0.55;
 }
 
-.acp-chat__select--agent {
+.wilkes-chat__select--agent {
   font-weight: 600;
   max-width: 200px;
 }
 
-.acp-chat__config {
+.wilkes-chat__config {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   gap: 4px;
 }
 
-.acp-chat__config-option {
+.wilkes-chat__config-option {
   display: flex;
   min-width: 0;
   border: 1px solid var(--acp-border);
@@ -141,13 +141,13 @@
   background: var(--acp-bg-raised);
 }
 
-.acp-chat__config-option .acp-chat__select {
+.wilkes-chat__config-option .wilkes-chat__select {
   width: 100%;
 }
 
 /* ── Buttons ────────────────────────────────────────────────────────────── */
 
-.acp-chat__button {
+.wilkes-chat__button {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -161,27 +161,27 @@
   cursor: pointer;
 }
 
-.acp-chat__button:hover:not(:disabled) {
+.wilkes-chat__button:hover:not(:disabled) {
   background: var(--acp-bg-user);
 }
 
-.acp-chat__button--primary {
+.wilkes-chat__button--primary {
   color: var(--acp-accent-text);
   background: var(--acp-accent);
   border-color: transparent;
 }
 
-.acp-chat__button--primary:hover:not(:disabled) {
+.wilkes-chat__button--primary:hover:not(:disabled) {
   filter: brightness(1.08);
   background: var(--acp-accent);
 }
 
-.acp-chat__button:disabled {
+.wilkes-chat__button:disabled {
   opacity: 0.45;
   cursor: default;
 }
 
-.acp-chat__icon-button {
+.wilkes-chat__icon-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -195,56 +195,56 @@
   cursor: pointer;
 }
 
-.acp-chat__icon-button:hover:not(:disabled) {
+.wilkes-chat__icon-button:hover:not(:disabled) {
   color: var(--acp-text);
   background: var(--acp-bg-raised);
 }
 
-.acp-chat__icon-button--danger:hover:not(:disabled) {
+.wilkes-chat__icon-button--danger:hover:not(:disabled) {
   color: var(--acp-danger);
 }
 
-.acp-chat__icon-button:disabled {
+.wilkes-chat__icon-button:disabled {
   opacity: 0.35;
   cursor: default;
 }
 
 /* ── History ────────────────────────────────────────────────────────────── */
 
-.acp-chat__history {
+.wilkes-chat__history {
   max-height: 220px;
   overflow-y: auto;
   border-bottom: 1px solid var(--acp-border);
   background: var(--acp-bg-raised);
 }
 
-.acp-chat__history-empty {
+.wilkes-chat__history-empty {
   padding: 10px;
   font-size: var(--acp-font-size-small);
 }
 
-.acp-chat__history-list {
+.wilkes-chat__history-list {
   margin: 0;
   padding: 4px;
   list-style: none;
 }
 
-.acp-chat__history-item {
+.wilkes-chat__history-item {
   display: flex;
   align-items: center;
   gap: 2px;
   border-radius: var(--acp-radius);
 }
 
-.acp-chat__history-item:hover {
+.wilkes-chat__history-item:hover {
   background: var(--acp-bg-user);
 }
 
-.acp-chat__history-item--current .acp-chat__history-title {
+.wilkes-chat__history-item--current .wilkes-chat__history-title {
   font-weight: 600;
 }
 
-.acp-chat__history-open {
+.wilkes-chat__history-open {
   display: flex;
   align-items: baseline;
   gap: 8px;
@@ -261,12 +261,12 @@
   cursor: pointer;
 }
 
-.acp-chat__history-open:disabled {
+.wilkes-chat__history-open:disabled {
   opacity: 0.5;
   cursor: default;
 }
 
-.acp-chat__history-title {
+.wilkes-chat__history-title {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -276,7 +276,7 @@
 
 /* ── Banners ────────────────────────────────────────────────────────────── */
 
-.acp-chat__banner {
+.wilkes-chat__banner {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -287,11 +287,11 @@
   border-bottom: 1px solid var(--acp-border);
 }
 
-.acp-chat__banner--error {
+.wilkes-chat__banner--error {
   color: var(--acp-danger);
 }
 
-.acp-chat__banner-text {
+.wilkes-chat__banner-text {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -299,8 +299,8 @@
   white-space: nowrap;
 }
 
-.acp-chat__pending,
-.acp-chat__setup {
+.wilkes-chat__pending,
+.wilkes-chat__setup {
   flex: 1;
   overflow-y: auto;
   padding: 12px;
@@ -308,19 +308,19 @@
   color: var(--acp-text-muted);
 }
 
-.acp-chat__setup {
+.wilkes-chat__setup {
   display: flex;
   flex-direction: column;
   gap: 8px;
   align-items: flex-start;
 }
 
-.acp-chat__setup-lead {
+.wilkes-chat__setup-lead {
   margin: 0;
   color: var(--acp-text);
 }
 
-.acp-chat__setup-row {
+.wilkes-chat__setup-row {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -331,14 +331,14 @@
   border-radius: var(--acp-radius);
 }
 
-.acp-chat__setup-name {
+.wilkes-chat__setup-name {
   color: var(--acp-text);
   font-weight: 600;
 }
 
 /* ── Transcript ─────────────────────────────────────────────────────────── */
 
-.acp-chat__transcript {
+.wilkes-chat__transcript {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -351,19 +351,19 @@
   gap: var(--acp-gap);
 }
 
-.acp-chat__transcript:focus-visible {
+.wilkes-chat__transcript:focus-visible {
   outline: 2px solid var(--acp-accent);
   outline-offset: -2px;
 }
 
-.acp-chat__empty {
+.wilkes-chat__empty {
   margin: auto 0;
   color: var(--acp-text-dim);
   font-size: var(--acp-font-size-small);
   text-align: center;
 }
 
-.acp-chat__message {
+.wilkes-chat__message {
   display: flex;
   flex-direction: column;
   max-width: 100%;
@@ -380,21 +380,21 @@
   contain-intrinsic-size: auto 90px;
 }
 
-.acp-chat__message--user {
+.wilkes-chat__message--user {
   align-items: flex-end;
 }
 
-.acp-chat__message--assistant {
+.wilkes-chat__message--assistant {
   align-items: flex-start;
 }
 
-.acp-chat__message-meta {
+.wilkes-chat__message-meta {
   font-size: 10px;
   color: var(--acp-text-dim);
   margin-bottom: 2px;
 }
 
-.acp-chat__bubble {
+.wilkes-chat__bubble {
   max-width: var(--acp-measure);
   padding: 7px 10px;
   border-radius: var(--acp-radius);
@@ -403,25 +403,25 @@
   overflow-wrap: anywhere;
 }
 
-.acp-chat__message--user .acp-chat__bubble {
+.wilkes-chat__message--user .wilkes-chat__bubble {
   background: var(--acp-bg-user);
 }
 
-.acp-chat__message--assistant .acp-chat__bubble {
+.wilkes-chat__message--assistant .wilkes-chat__bubble {
   border: 1px solid var(--acp-border);
 }
 
-.acp-chat__user-text {
+.wilkes-chat__user-text {
   white-space: pre-wrap;
 }
 
-.acp-chat__blocks {
+.wilkes-chat__blocks {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.acp-chat__message-actions {
+.wilkes-chat__message-actions {
   display: flex;
   gap: 2px;
   margin-top: 1px;
@@ -431,79 +431,79 @@
   transition: opacity 120ms ease;
 }
 
-.acp-chat__message:hover .acp-chat__message-actions,
-.acp-chat__message:focus-within .acp-chat__message-actions {
+.wilkes-chat__message:hover .wilkes-chat__message-actions,
+.wilkes-chat__message:focus-within .wilkes-chat__message-actions {
   opacity: 1;
 }
 
-.acp-chat__edit {
+.wilkes-chat__edit {
   display: flex;
   flex-direction: column;
   gap: 6px;
   min-width: min(320px, 60vw);
 }
 
-.acp-chat__edit-actions {
+.wilkes-chat__edit-actions {
   display: flex;
   justify-content: flex-end;
   gap: 4px;
 }
 
-.acp-chat__message-error {
+.wilkes-chat__message-error {
   margin-top: 4px;
   color: var(--acp-danger);
   font-size: var(--acp-font-size-small);
 }
 
-.acp-chat__caret {
-  animation: acp-chat-blink 1s steps(2, start) infinite;
+.wilkes-chat__caret {
+  animation: wilkes-chat-blink 1s steps(2, start) infinite;
 }
 
-@keyframes acp-chat-blink {
+@keyframes wilkes-chat-blink {
   to {
     visibility: hidden;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .acp-chat__caret {
+  .wilkes-chat__caret {
     animation: none;
   }
 }
 
 /* ── Prose ──────────────────────────────────────────────────────────────── */
 
-.acp-chat__prose > :first-child {
+.wilkes-chat__prose > :first-child {
   margin-top: 0;
 }
 
-.acp-chat__prose > :last-child {
+.wilkes-chat__prose > :last-child {
   margin-bottom: 0;
 }
 
-.acp-chat__prose p,
-.acp-chat__prose ul,
-.acp-chat__prose ol,
-.acp-chat__prose pre,
-.acp-chat__prose blockquote {
+.wilkes-chat__prose p,
+.wilkes-chat__prose ul,
+.wilkes-chat__prose ol,
+.wilkes-chat__prose pre,
+.wilkes-chat__prose blockquote {
   margin: 0.5em 0;
 }
 
-.acp-chat__prose ul,
-.acp-chat__prose ol {
+.wilkes-chat__prose ul,
+.wilkes-chat__prose ol {
   padding-left: 1.3em;
 }
 
-.acp-chat__prose h1,
-.acp-chat__prose h2,
-.acp-chat__prose h3,
-.acp-chat__prose h4 {
+.wilkes-chat__prose h1,
+.wilkes-chat__prose h2,
+.wilkes-chat__prose h3,
+.wilkes-chat__prose h4 {
   margin: 0.8em 0 0.35em;
   font-size: 1em;
   font-weight: 700;
 }
 
-.acp-chat__prose code {
+.wilkes-chat__prose code {
   font-family: var(--acp-mono);
   font-size: 0.92em;
   padding: 0.1em 0.3em;
@@ -511,44 +511,44 @@
   background: var(--acp-bg-raised);
 }
 
-.acp-chat__prose pre {
+.wilkes-chat__prose pre {
   overflow-x: auto;
   padding: 8px;
   border-radius: var(--acp-radius);
   background: var(--acp-bg-raised);
 }
 
-.acp-chat__prose pre code {
+.wilkes-chat__prose pre code {
   padding: 0;
   background: none;
 }
 
-.acp-chat__prose table {
+.wilkes-chat__prose table {
   display: block;
   overflow-x: auto;
   border-collapse: collapse;
 }
 
-.acp-chat__prose th,
-.acp-chat__prose td {
+.wilkes-chat__prose th,
+.wilkes-chat__prose td {
   padding: 3px 8px;
   border: 1px solid var(--acp-border);
   text-align: left;
 }
 
-.acp-chat__prose blockquote {
+.wilkes-chat__prose blockquote {
   padding-left: 8px;
   border-left: 2px solid var(--acp-border);
   color: var(--acp-text-muted);
 }
 
-.acp-chat__prose a {
+.wilkes-chat__prose a {
   color: var(--acp-accent);
 }
 
 /* ── Chips, tools, thoughts ─────────────────────────────────────────────── */
 
-.acp-chat__chip {
+.wilkes-chat__chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -563,26 +563,26 @@
   cursor: pointer;
 }
 
-.acp-chat__chip:hover {
+.wilkes-chat__chip:hover {
   color: var(--acp-text);
 }
 
-.acp-chat__chevron {
+.wilkes-chat__chevron {
   transition: transform 120ms ease;
 }
 
-.acp-chat__chevron--closed {
+.wilkes-chat__chevron--closed {
   transform: rotate(-90deg);
 }
 
-.acp-chat__tool-title {
+.wilkes-chat__tool-title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 220px;
 }
 
-.acp-chat__tool-detail {
+.wilkes-chat__tool-detail {
   margin-top: 4px;
   padding: 8px;
   display: flex;
@@ -594,11 +594,11 @@
   border-radius: var(--acp-radius);
 }
 
-.acp-chat__thought {
+.wilkes-chat__thought {
   margin-bottom: 6px;
 }
 
-.acp-chat__pre {
+.wilkes-chat__pre {
   margin: 0;
   max-height: 240px;
   overflow: auto;
@@ -612,35 +612,35 @@
   color: var(--acp-text);
 }
 
-.acp-chat__pre--added {
+.wilkes-chat__pre--added {
   color: var(--acp-added);
 }
 
-.acp-chat__pre--removed {
+.wilkes-chat__pre--removed {
   color: var(--acp-removed);
 }
 
-.acp-chat__diff {
+.wilkes-chat__diff {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.acp-chat__diff-path,
-.acp-chat__raw-label {
+.wilkes-chat__diff-path,
+.wilkes-chat__raw-label {
   color: var(--acp-text-dim);
   font-size: 9px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
-.acp-chat__locations {
+.wilkes-chat__locations {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.acp-chat__location {
+.wilkes-chat__location {
   font-family: var(--acp-mono);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -648,7 +648,7 @@
   text-align: left;
 }
 
-.acp-chat__location--actionable {
+.wilkes-chat__location--actionable {
   padding: 0;
   color: var(--acp-accent);
   font-size: inherit;
@@ -657,20 +657,20 @@
   cursor: pointer;
 }
 
-.acp-chat__location--actionable:hover {
+.wilkes-chat__location--actionable:hover {
   text-decoration: underline;
 }
 
 /* ── Permissions ────────────────────────────────────────────────────────── */
 
-.acp-chat__permissions {
+.wilkes-chat__permissions {
   display: flex;
   flex-direction: column;
   gap: 6px;
   margin-bottom: 6px;
 }
 
-.acp-chat__permission {
+.wilkes-chat__permission {
   padding: 8px;
   font-size: var(--acp-font-size-small);
   border: 1px solid var(--acp-border);
@@ -678,24 +678,24 @@
   background: var(--acp-bg-raised);
 }
 
-.acp-chat__permission-title {
+.wilkes-chat__permission-title {
   margin-bottom: 6px;
   color: var(--acp-text);
 }
 
-.acp-chat__permission-options {
+.wilkes-chat__permission-options {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
 }
 
-.acp-chat__permission-decision {
+.wilkes-chat__permission-decision {
   color: var(--acp-text-dim);
 }
 
 /* ── Composer ───────────────────────────────────────────────────────────── */
 
-.acp-chat__composer {
+.wilkes-chat__composer {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -703,7 +703,7 @@
   border-top: 1px solid var(--acp-border);
 }
 
-.acp-chat__textarea {
+.wilkes-chat__textarea {
   width: 100%;
   resize: vertical;
   min-height: 46px;
@@ -716,23 +716,23 @@
   border-radius: var(--acp-radius);
 }
 
-.acp-chat__textarea:focus {
+.wilkes-chat__textarea:focus {
   outline: none;
   border-color: var(--acp-accent);
 }
 
-.acp-chat__textarea:disabled {
+.wilkes-chat__textarea:disabled {
   opacity: 0.5;
 }
 
-.acp-chat__composer-actions {
+.wilkes-chat__composer-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
 
-.acp-chat__hint {
+.wilkes-chat__hint {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -740,11 +740,11 @@
 
 /* ── Shared ink ─────────────────────────────────────────────────────────── */
 
-.acp-chat__dim {
+.wilkes-chat__dim {
   color: var(--acp-text-dim);
   font-size: var(--acp-font-size-small);
 }
 
-.acp-chat__muted {
+.wilkes-chat__muted {
   color: var(--acp-text-muted);
 }

@@ -6,7 +6,7 @@
 // streaming, the stick-to-bottom and the patch semantics badly.
 //
 // The transport is neither: it is the seam, and a host supplies it. The
-// desktop implementation is a separate entry point (`@leonrjg/acp-chat/tauri`)
+// desktop implementation is a separate entry point (`@leonrjg/wilkes-chat/tauri`)
 // so `@tauri-apps/api` stays optional for hosts that are not desktop.
 
 export { ChatPane } from "./ChatPane";

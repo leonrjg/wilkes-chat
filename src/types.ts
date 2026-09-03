@@ -1,6 +1,6 @@
 // The wire, as the client sees it.
 //
-// Every shape here is the mirror of one in `crates/acp-chat` — `ChatUpdate` of
+// Every shape here is the mirror of one in `crates/wilkes-chat` — `ChatUpdate` of
 // `wire::ChatUpdate`, `ChatMessageRecord` of `store::ChatMessageRecord`, and so
 // on. They ship in the same package and change in the same commit, which is
 // the only thing that keeps them honest: no compiler sees both sides.

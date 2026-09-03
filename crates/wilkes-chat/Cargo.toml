@@ -1,10 +1,10 @@
 [package]
-name = "acp-chat"
+name = "wilkes-chat"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
 description = "An ACP (Agent Client Protocol) chat client: backend discovery, session lifetime, streaming turns, tool calls and permissions, with the host's domain kept behind one trait."
-repository = "https://github.com/leonrjg/acp-chat"
+repository = "https://github.com/leonrjg/wilkes-chat"
 
 [dependencies]
 agent-client-protocol = "1.0.1"

@@ -1,7 +1,7 @@
 // The desktop half of the contract in `transport.ts`, over Tauri's IPC.
 //
 // It ships here rather than in each application because the command names and
-// event channels are this package's — `crates/acp-chat` is what the host wires
+// event channels are this package's — `crates/wilkes-chat` is what the host wires
 // them to — and a host re-deriving them is a second place for them to drift.
 //
 // `@tauri-apps/api` is an optional peer dependency: importing this module is

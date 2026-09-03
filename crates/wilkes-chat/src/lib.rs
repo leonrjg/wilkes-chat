@@ -19,7 +19,7 @@
 //!
 //! ```no_run
 //! # async fn example() -> anyhow::Result<()> {
-//! use acp_chat::{backend::AgentBackend, session};
+//! use wilkes_chat::{backend::AgentBackend, session};
 //!
 //! let spawned = session::spawn(session::SpawnOptions::new(
 //!     AgentBackend::ClaudeCode,

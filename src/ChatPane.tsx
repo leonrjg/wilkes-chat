@@ -139,19 +139,19 @@ export function ChatPane({
   };
 
   return (
-    <div className={className ? `acp-chat ${className}` : "acp-chat"}>
-      <header className="acp-chat__header">
-        <div className="acp-chat__header-row">
+    <div className={className ? `wilkes-chat ${className}` : "wilkes-chat"}>
+      <header className="wilkes-chat__header">
+        <div className="wilkes-chat__header-row">
           <span
-            className={`acp-chat__status-dot${activeBackend?.available ? " acp-chat__status-dot--on" : ""}`}
+            className={`wilkes-chat__status-dot${activeBackend?.available ? " wilkes-chat__status-dot--on" : ""}`}
             aria-hidden="true"
           />
-          <label className="acp-chat__visually-hidden" htmlFor="acp-chat-agent">
+          <label className="wilkes-chat__visually-hidden" htmlFor="wilkes-chat-agent">
             Agent
           </label>
           <select
-            id="acp-chat-agent"
-            className="acp-chat__select acp-chat__select--agent"
+            id="wilkes-chat-agent"
+            className="wilkes-chat__select wilkes-chat__select--agent"
             value={backend ?? ""}
             disabled={starting || streaming}
             onChange={(event) => switchBackend(event.target.value as AgentBackend).catch(ignore)}
@@ -165,10 +165,10 @@ export function ChatPane({
             ))}
           </select>
 
-          <div className="acp-chat__header-actions">
+          <div className="wilkes-chat__header-actions">
             <button
               type="button"
-              className="acp-chat__icon-button"
+              className="wilkes-chat__icon-button"
               title="New chat"
               aria-label="New chat"
               disabled={!sessionId || starting || streaming}
@@ -178,7 +178,7 @@ export function ChatPane({
             </button>
             <button
               type="button"
-              className="acp-chat__icon-button"
+              className="wilkes-chat__icon-button"
               title="Saved chats"
               aria-label="Saved chats"
               aria-expanded={historyOpen}
@@ -189,7 +189,7 @@ export function ChatPane({
             </button>
             <button
               type="button"
-              className="acp-chat__icon-button"
+              className="wilkes-chat__icon-button"
               // The agent's own id for this conversation, not ours: it is what
               // identifies the thread in the CLI's own logs and storage, which
               // is the only place anyone would go looking with it.
@@ -212,7 +212,7 @@ export function ChatPane({
             {onClose && (
               <button
                 type="button"
-                className="acp-chat__icon-button"
+                className="wilkes-chat__icon-button"
                 title="Close chat"
                 aria-label="Close chat"
                 onClick={onClose}
@@ -224,12 +224,12 @@ export function ChatPane({
         </div>
 
         {configOptions.length > 0 && (
-          <div className="acp-chat__config">
+          <div className="wilkes-chat__config">
             {configOptions.map((option) => (
-              <label key={option.id} className="acp-chat__config-option" title={option.name}>
-                <span className="acp-chat__visually-hidden">{option.name}</span>
+              <label key={option.id} className="wilkes-chat__config-option" title={option.name}>
+                <span className="wilkes-chat__visually-hidden">{option.name}</span>
                 <select
-                  className="acp-chat__select"
+                  className="wilkes-chat__select"
                   value={option.current_value}
                   disabled={streaming}
                   onChange={(event) => setConfigOption(option.id, event.target.value)}
@@ -253,45 +253,45 @@ export function ChatPane({
       </header>
 
       {historyOpen && (
-        <div className="acp-chat__history">
+        <div className="wilkes-chat__history">
           {conversations.length === 0 ? (
-            <div className="acp-chat__muted acp-chat__history-empty">
+            <div className="wilkes-chat__muted wilkes-chat__history-empty">
               {conversationsLoading ? "Loading saved chats…" : "No saved chats yet."}
             </div>
           ) : (
-            <ul className="acp-chat__history-list">
+            <ul className="wilkes-chat__history-list">
               {conversations.map((conversation) => (
                 <li
                   key={conversation.conversation_id}
                   className={
                     conversation.conversation_id === conversationId
-                      ? "acp-chat__history-item acp-chat__history-item--current"
-                      : "acp-chat__history-item"
+                      ? "wilkes-chat__history-item wilkes-chat__history-item--current"
+                      : "wilkes-chat__history-item"
                   }
                 >
                   <button
                     type="button"
-                    className="acp-chat__history-open"
+                    className="wilkes-chat__history-open"
                     disabled={streaming || starting}
                     onClick={() => {
                       setHistoryOpen(false);
                       openConversation(conversation.conversation_id).catch(ignore);
                     }}
                   >
-                    <span className="acp-chat__history-title">
+                    <span className="wilkes-chat__history-title">
                       {/* A fork carries its parent's name; without this it
                           reads as an unrelated chat that happens to be called
                           the same thing. */}
                       {conversation.parent_conversation_id ? "↳ " : ""}
                       {conversation.title}
                     </span>
-                    <span className="acp-chat__dim">
+                    <span className="wilkes-chat__dim">
                       {formatConversationDate(conversation.updated_at)}
                     </span>
                   </button>
                   <button
                     type="button"
-                    className="acp-chat__icon-button acp-chat__icon-button--danger"
+                    className="wilkes-chat__icon-button wilkes-chat__icon-button--danger"
                     title="Delete this chat"
                     aria-label={`Delete ${conversation.title}`}
                     onClick={() =>
@@ -308,18 +308,18 @@ export function ChatPane({
       )}
 
       {starting && (
-        <div className="acp-chat__banner">Starting the agent…</div>
+        <div className="wilkes-chat__banner">Starting the agent…</div>
       )}
 
       {sessionError && (
-        <div className="acp-chat__banner acp-chat__banner--error" role="alert">
-          <span className="acp-chat__banner-text">
+        <div className="wilkes-chat__banner wilkes-chat__banner--error" role="alert">
+          <span className="wilkes-chat__banner-text">
             {activeBackend?.label ?? "The agent"} — {sessionError}
           </span>
           {backend && (
             <button
               type="button"
-              className="acp-chat__button"
+              className="wilkes-chat__button"
               onClick={() => switchBackend(backend).catch(ignore)}
             >
               <RefreshIcon size={11} /> Retry
@@ -329,18 +329,18 @@ export function ChatPane({
       )}
 
       {backendsLoading && !backendsLoaded ? (
-        <div className="acp-chat__pending">Checking which agents are installed…</div>
+        <div className="wilkes-chat__pending">Checking which agents are installed…</div>
       ) : !hasAvailableBackend && backendsLoaded ? (
-        <div className="acp-chat__setup">
-          <p className="acp-chat__setup-lead">No agent is set up yet.</p>
+        <div className="wilkes-chat__setup">
+          <p className="wilkes-chat__setup-lead">No agent is set up yet.</p>
           {backends.map((b) => (
-            <div key={b.backend} className="acp-chat__setup-row">
-              <div className="acp-chat__setup-name">{b.label}</div>
-              <div className="acp-chat__muted">{b.unavailable_reason ?? b.auth_note}</div>
+            <div key={b.backend} className="wilkes-chat__setup-row">
+              <div className="wilkes-chat__setup-name">{b.label}</div>
+              <div className="wilkes-chat__muted">{b.unavailable_reason ?? b.auth_note}</div>
               {b.installable && (
                 <button
                   type="button"
-                  className="acp-chat__button acp-chat__button--primary"
+                  className="wilkes-chat__button wilkes-chat__button--primary"
                   disabled={installingBackend !== null}
                   onClick={() => installBackend(b.backend).catch(ignore)}
                 >
@@ -352,7 +352,7 @@ export function ChatPane({
           ))}
           <button
             type="button"
-            className="acp-chat__button"
+            className="wilkes-chat__button"
             disabled={backendsLoading || installingBackend !== null}
             onClick={() => loadBackends({ force: true }).catch(ignore)}
           >
@@ -362,7 +362,7 @@ export function ChatPane({
       ) : (
         <div
           ref={transcriptRef}
-          className="acp-chat__transcript"
+          className="wilkes-chat__transcript"
           tabIndex={0}
           // Following the bottom is right until the reader scrolls up to read
           // something. Every gesture that means "I am reading" detaches; only
@@ -394,7 +394,7 @@ export function ChatPane({
           }}
         >
           {messages.length === 0 && !starting && (
-            <div className="acp-chat__empty">{emptyState}</div>
+            <div className="wilkes-chat__empty">{emptyState}</div>
           )}
           {messages.map((message) => (
             <MessageBubble
@@ -424,14 +424,14 @@ export function ChatPane({
       )}
 
       <form
-        className="acp-chat__composer"
+        className="wilkes-chat__composer"
         onSubmit={(event) => {
           event.preventDefault();
           send();
         }}
       >
         <textarea
-          className="acp-chat__textarea"
+          className="wilkes-chat__textarea"
           value={draft}
           rows={2}
           placeholder={placeholder}
@@ -447,14 +447,14 @@ export function ChatPane({
             }
           }}
         />
-        <div className="acp-chat__composer-actions">
-          <span className="acp-chat__dim acp-chat__hint">
+        <div className="wilkes-chat__composer-actions">
+          <span className="wilkes-chat__dim wilkes-chat__hint">
             Enter to send · Shift+Enter for a new line
           </span>
           {streaming ? (
             <button
               type="button"
-              className="acp-chat__button"
+              className="wilkes-chat__button"
               onClick={() => cancel().catch(ignore)}
             >
               <StopIcon size={10} /> Stop
@@ -462,7 +462,7 @@ export function ChatPane({
           ) : (
             <button
               type="submit"
-              className="acp-chat__button acp-chat__button--primary"
+              className="wilkes-chat__button wilkes-chat__button--primary"
               disabled={!draft.trim() || !sessionId || starting}
             >
               <SendIcon size={10} /> Send
