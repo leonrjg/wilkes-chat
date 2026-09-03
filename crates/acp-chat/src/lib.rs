@@ -1,6 +1,6 @@
 //! An ACP chat client, with the application it serves kept behind one trait.
 //!
-//! Four things, and an application supplies none of them:
+//! Five things, and an application supplies none of them:
 //!
 //! - **[`backend`]** — which CLI answers, whether its adapter is on this
 //!   machine, and how to launch it.
@@ -8,6 +8,8 @@
 //!   turn, tool calls, the parked permission request, session configuration.
 //! - **[`store`]** — conversations on disk, so a chat outlives its window.
 //! - **[`transcript`]** — folding streamed events back into stored messages.
+//! - **[`wire`]** — what an event looks like on its way to a client, so a
+//!   host names the channel and nothing else.
 //!
 //! What an application *does* supply is [`host::ChatHost`]: what to push into
 //! a prompt, which MCP servers to attach, which reads to answer, and which
@@ -41,6 +43,7 @@ pub mod host;
 pub mod session;
 pub mod store;
 pub mod transcript;
+pub mod wire;
 
 pub use backend::{
     backend_status, install_backend, is_resumable, label, list_backends, AgentBackend,
@@ -52,3 +55,4 @@ pub use session::{
     SpawnedChatSession,
 };
 pub use transcript::apply_chat_event;
+pub use wire::{emission, ChatEmission, ChatUpdate};

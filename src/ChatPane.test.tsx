@@ -1,0 +1,263 @@
+import { act, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it } from "vitest";
+
+import { ChatPane } from "./ChatPane";
+import { createChatStore, type ChatStore } from "./createChatStore";
+import { backendStatus, createFakeTransport, type FakeTransport } from "./testing/fakeTransport";
+
+let transport: FakeTransport;
+let store: ChatStore;
+
+function build(options: Parameters<typeof createFakeTransport>[0] = {}) {
+  transport = createFakeTransport(options);
+  store = createChatStore({ transport, onBackgroundError: () => {} });
+}
+
+/** Mount and wait for the session the pane opens on mount. */
+async function mount(props: Partial<React.ComponentProps<typeof ChatPane>> = {}) {
+  const rendered = render(<ChatPane store={store} {...props} />);
+  await waitFor(() => expect(store.getState().backendsLoaded).toBe(true));
+  return rendered;
+}
+
+beforeEach(() => {
+  build();
+});
+
+describe("with no agent installed", () => {
+  it("says so and offers to install the one that can be", async () => {
+    build({
+      backends: [
+        backendStatus("ClaudeCode", {
+          label: "Claude Code",
+          available: false,
+          installable: true,
+          unavailable_reason: "the adapter is not downloaded yet",
+        }),
+      ],
+    });
+    await mount();
+
+    expect(await screen.findByText("No agent is set up yet.")).toBeInTheDocument();
+    expect(screen.getByText("the adapter is not downloaded yet")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /install/i }));
+
+    await waitFor(() => expect(store.getState().hasAvailableBackend).toBe(true));
+  });
+
+  it("offers a recheck rather than only a reason", async () => {
+    // Installing an agent happens outside the window; without this the only
+    // way to notice is to restart the application.
+    build({
+      backends: [
+        backendStatus("ClaudeCode", {
+          available: false,
+          installable: false,
+          unavailable_reason: "Node.js was not found on PATH",
+        }),
+      ],
+    });
+    await mount();
+
+    expect(await screen.findByRole("button", { name: /recheck/i })).toBeInTheDocument();
+  });
+
+  it("will not let a message be typed", async () => {
+    build({
+      backends: [backendStatus("ClaudeCode", { available: false, installable: true })],
+    });
+    await mount();
+
+    expect(await screen.findByLabelText("Message")).toBeDisabled();
+  });
+});
+
+describe("with an agent running", () => {
+  it("sends what was typed and shows the answer as it arrives", async () => {
+    await mount();
+    await waitFor(() => expect(store.getState().sessionId).toBeTruthy());
+
+    await userEvent.type(screen.getByLabelText("Message"), "What is a monad?");
+    await userEvent.click(screen.getByRole("button", { name: /send/i }));
+
+    expect(await screen.findByText("What is a monad?")).toBeInTheDocument();
+    const turn = transport.lastTurn();
+
+    act(() => turn.emit({ kind: "text", delta: "A monoid in the category of endofunctors." }));
+    expect(
+      await screen.findByText(/A monoid in the category of endofunctors/),
+    ).toBeInTheDocument();
+
+    act(() => turn.finish());
+    await waitFor(() => expect(store.getState().streaming).toBe(false));
+  });
+
+  it("sends on Enter and takes a new line on Shift+Enter", async () => {
+    await mount();
+    await waitFor(() => expect(store.getState().sessionId).toBeTruthy());
+    const box = screen.getByLabelText("Message");
+
+    await userEvent.type(box, "first line{Shift>}{Enter}{/Shift}second line");
+    expect(transport.turns).toHaveLength(0);
+    expect(box).toHaveValue("first line\nsecond line");
+
+    await userEvent.type(box, "{Enter}");
+    await waitFor(() => expect(transport.turns).toHaveLength(1));
+    expect(transport.lastTurn().text).toBe("first line\nsecond line");
+  });
+
+  it("will not send an empty message", async () => {
+    await mount();
+    await waitFor(() => expect(store.getState().sessionId).toBeTruthy());
+
+    await userEvent.type(screen.getByLabelText("Message"), "   ");
+    expect(screen.getByRole("button", { name: /send/i })).toBeDisabled();
+  });
+
+  it("offers Stop instead of Send while a turn runs, and stops it", async () => {
+    await mount();
+    await waitFor(() => expect(store.getState().sessionId).toBeTruthy());
+
+    await userEvent.type(screen.getByLabelText("Message"), "hello{Enter}");
+    const stop = await screen.findByRole("button", { name: /stop/i });
+    expect(screen.queryByRole("button", { name: /^send$/i })).not.toBeInTheDocument();
+
+    await userEvent.click(stop);
+    await waitFor(() => expect(transport.cancelled).toHaveLength(1));
+    expect(await screen.findByRole("button", { name: /send/i })).toBeInTheDocument();
+  });
+
+  it("puts the agent's own permission options in front of the user", async () => {
+    await mount();
+    await waitFor(() => expect(store.getState().sessionId).toBeTruthy());
+    await userEvent.type(screen.getByLabelText("Message"), "run the tests{Enter}");
+    await waitFor(() => expect(transport.turns).toHaveLength(1));
+
+    act(() =>
+      transport.lastTurn().emit({
+        kind: "permission",
+        request_id: "r1",
+        tool_call_id: "c1",
+        title: "Run the test suite",
+        options: [
+          { option_id: "allow", name: "Allow once", kind: "allow_once" },
+          { option_id: "deny", name: "Reject", kind: "reject_once" },
+        ],
+      }),
+    );
+
+    expect(await screen.findByText(/Run the test suite/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Allow once" }));
+
+    // Echoed back by the agent's own option id, never reinterpreted.
+    expect(transport.answered).toEqual([{ requestId: "r1", optionId: "allow" }]);
+    expect(await screen.findByText("Allow once")).toBeInTheDocument();
+  });
+
+  it("shows a tool call as a chip, and its detail only when asked", async () => {
+    await mount();
+    await waitFor(() => expect(store.getState().sessionId).toBeTruthy());
+    await userEvent.type(screen.getByLabelText("Message"), "read it{Enter}");
+    await waitFor(() => expect(transport.turns).toHaveLength(1));
+
+    act(() =>
+      transport.lastTurn().emit({
+        kind: "tool",
+        tool_call_id: "c1",
+        title: "Read config.toml",
+        status: "completed",
+        content: [{ kind: "text", text: "port = 8080" }],
+      }),
+    );
+
+    const chip = await screen.findByRole("button", { name: /Read config\.toml/ });
+    expect(screen.queryByText("port = 8080")).not.toBeInTheDocument();
+
+    await userEvent.click(chip);
+    expect(await screen.findByText("port = 8080")).toBeInTheDocument();
+  });
+
+  it("reports a dead subprocess and offers to start again", async () => {
+    await mount();
+    await waitFor(() => expect(store.getState().sessionId).toBeTruthy());
+
+    act(() => transport.failSession(store.getState().sessionId!, "the agent exited"));
+
+    const alert = await screen.findByRole("alert");
+    expect(within(alert).getByText(/the agent exited/)).toBeInTheDocument();
+    expect(within(alert).getByRole("button", { name: /retry/i })).toBeInTheDocument();
+  });
+});
+
+describe("saved chats", () => {
+  it("lists them and reopens the one that is picked", async () => {
+    build({
+      conversations: [
+        {
+          conversation_id: "conv-1",
+          backend: "ClaudeCode",
+          backend_session_id: "agent-1",
+          cwd: "/tmp/chat",
+          title: "What is a monad?",
+          created_at: "2026-09-01T10:00:00Z",
+          updated_at: "2026-09-01T10:05:00Z",
+          last_opened_at: "2026-09-01T10:05:00Z",
+          config_values: [],
+          messages: [
+            {
+              message_id: "m1",
+              turn_id: null,
+              role: "user",
+              thought: "",
+              content: [{ kind: "text", text: "What is a monad?" }],
+              error: null,
+            },
+          ],
+        },
+      ],
+    });
+    await mount();
+    await waitFor(() => expect(store.getState().conversations).toHaveLength(1));
+
+    await userEvent.click(screen.getByRole("button", { name: /saved chats/i }));
+    await userEvent.click(await screen.findByText("What is a monad?"));
+
+    await waitFor(() => expect(store.getState().conversationId).toBe("conv-1"));
+    expect(await screen.findByText("What is a monad?")).toBeInTheDocument();
+  });
+
+  it("asks before deleting one", async () => {
+    let asked = "";
+    build({
+      conversations: [
+        {
+          conversation_id: "conv-1",
+          backend: "ClaudeCode",
+          backend_session_id: "agent-1",
+          cwd: "/tmp/chat",
+          title: "Doomed chat",
+          created_at: "2026-09-01T10:00:00Z",
+          updated_at: "2026-09-01T10:05:00Z",
+          last_opened_at: "2026-09-01T10:05:00Z",
+          config_values: [],
+          messages: [],
+        },
+      ],
+    });
+    await mount({
+      confirmDelete: (title) => {
+        asked = title;
+        return true;
+      },
+    });
+    await waitFor(() => expect(store.getState().conversations).toHaveLength(1));
+
+    await userEvent.click(screen.getByRole("button", { name: /saved chats/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /delete doomed chat/i }));
+
+    expect(asked).toBe("Doomed chat");
+    await waitFor(() => expect(store.getState().conversations).toHaveLength(0));
+  });
+});

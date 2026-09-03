@@ -1,0 +1,67 @@
+{
+  "name": "@leonrjg/acp-chat",
+  "version": "0.1.0",
+  "description": "An ACP chat client shared between applications: the store, the pane, and the Tauri transport for the Rust crate that ships beside them.",
+  "license": "MIT",
+  "repository": "github:leonrjg/acp-chat",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./tauri": {
+      "types": "./dist/tauri.d.ts",
+      "default": "./dist/tauri.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/fakeTransport.d.ts",
+      "default": "./dist/testing/fakeTransport.js"
+    },
+    "./chat.css": "./dist/chat.css",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && cp src/*.css dist/",
+    "prepare": "tsc -p tsconfig.build.json && cp src/*.css dist/",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "peerDependencies": {
+    "@tauri-apps/api": "^2",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zustand": "^5"
+  },
+  "peerDependenciesMeta": {
+    "@tauri-apps/api": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@tauri-apps/api": "^2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^26.3.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "jsdom": "^29.0.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5",
+    "vitest": "^4.1.2",
+    "zustand": "^5"
+  }
+}
