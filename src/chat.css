@@ -276,6 +276,18 @@
 
 /* ── Banners ────────────────────────────────────────────────────────────── */
 
+.wilkes-chat__context-bar {
+  flex: 0 0 auto;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--wilkes-chat-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  font-size: var(--wilkes-chat-font-size-small);
+  color: var(--wilkes-chat-text-muted);
+}
+
 .wilkes-chat__banner {
   display: flex;
   align-items: center;

@@ -41,6 +41,35 @@ consequence: `session/load` replays what was *sent*, so without it a resumed
 conversation shows the user their own question with the machinery stapled to
 the front of it.
 
+### How the host learns what to say
+
+`ChatHost` answers those questions inside the shell. What it answers them
+*about* — which documents are in context, which root to search — is usually
+known only in the window, so it has to get there.
+
+It rides the calls it affects. `createChatStore({ hostPayload })` is asked for
+a value afresh on every call that opens a session or sends a turn, the
+transport carries it under one agreed name, and the shell hands it to its
+`ChatHost`. Nothing in this package reads it.
+
+Asking late, every time, is the point. The alternative — commands of the
+application's own that push context into a live session — is what Wilkes had,
+and it meant the client's state and the session's state were two copies with a
+replay loop between them: switching agents re-pushed every document by hand,
+and anything that forgot to would leave a session answering about a file the
+pane no longer showed. Carrying the current answer on every call makes a fresh
+subprocess and a five-minute-old one hear the same thing from the same code
+path, so there is one owner and nothing to keep in step.
+
+A host with no domain passes no `hostPayload`, and no such argument reaches the
+wire at all — a general chat's commands never have to declare one.
+
+`ChatPane` takes the two slots that go with it: `contextBar`, a band between
+the header and the transcript for what the next message will be answered from,
+and `hint`, which replaces the composer's keyboard hint. The bar sits outside
+the transcript's scroll on purpose: it describes the turn about to be taken,
+not the ones already taken.
+
 ### The permission boundary
 
 There is one, and it is the user's.

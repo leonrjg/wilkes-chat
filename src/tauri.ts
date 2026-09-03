@@ -32,6 +32,12 @@ export function randomId(): string {
   return `id-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
 }
 
+/** Add the application's opaque host blob to a command payload, or leave the
+ *  payload untouched when there is none. */
+function withHost(args: Record<string, unknown>, host: unknown): Record<string, unknown> {
+  return host === undefined ? args : { ...args, host };
+}
+
 export function tauriChatTransport(): ChatTransport {
   return {
     listBackends: (refresh = false) =>
@@ -46,18 +52,25 @@ export function tauriChatTransport(): ChatTransport {
     forgetConversation: (conversationId: string) =>
       invoke<void>("chat_forget_conversation", { conversationId }),
 
-    start: (backend: AgentBackend) =>
-      invoke<ChatStartResult>("chat_start", { backend }),
+    // `host` is left off the payload entirely when there is none, rather than
+    // sent as null: an application whose commands take no such argument must
+    // not have to declare one to be called at all.
+    start: (backend: AgentBackend, host?: unknown) =>
+      invoke<ChatStartResult>("chat_start", withHost({ backend }, host)),
 
-    openConversation: (conversationId: string) =>
-      invoke<ChatStartResult>("chat_open_conversation", { conversationId }),
+    openConversation: (conversationId: string, host?: unknown) =>
+      invoke<ChatStartResult>("chat_open_conversation", withHost({ conversationId }, host)),
 
-    forkConversation: (conversationId: string, messageId: string, includeMessage: boolean) =>
-      invoke<ChatStartResult>("chat_fork_conversation", {
-        conversationId,
-        messageId,
-        includeMessage,
-      }),
+    forkConversation: (
+      conversationId: string,
+      messageId: string,
+      includeMessage: boolean,
+      host?: unknown,
+    ) =>
+      invoke<ChatStartResult>(
+        "chat_fork_conversation",
+        withHost({ conversationId, messageId, includeMessage }, host),
+      ),
 
     close: (sessionId: string) => invoke<void>("chat_close", { sessionId }),
 
@@ -70,7 +83,7 @@ export function tauriChatTransport(): ChatTransport {
 
     newTurnId: randomId,
 
-    async send(sessionId, turnId, userMessageId, text, onUpdate, onDone) {
+    async send(sessionId, turnId, userMessageId, text, host, onUpdate, onDone) {
       // Both listeners are registered before the invoke, not after: a short
       // reply can finish before an awaited `invoke` resolves, and a client
       // that subscribed afterwards would lose exactly the fastest answers.
@@ -88,12 +101,10 @@ export function tauriChatTransport(): ChatTransport {
       );
 
       try {
-        return await invoke<ChatSendResult>("chat_send", {
-          sessionId,
-          turnId,
-          userMessageId,
-          text,
-        });
+        return await invoke<ChatSendResult>(
+          "chat_send",
+          withHost({ sessionId, turnId, userMessageId, text }, host),
+        );
       } catch (error) {
         // The turn never started, so `chat/done` will never fire and these two
         // would leak for the life of the window. The caller still sees the

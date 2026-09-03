@@ -31,6 +31,8 @@ export interface FakeTurn {
   turnId: string;
   userMessageId: string;
   text: string;
+  /** The application's host blob as it stood when this turn was sent. */
+  host: unknown;
   /** Deliver one streamed update into this turn. */
   emit: (update: ChatUpdate) => void;
   /** End the turn. Resolves `send` with `conversationId`. */
@@ -87,6 +89,10 @@ export interface FakeTransport extends ChatTransport {
     messageId: string;
     includeMessage: boolean;
   }>;
+  /** Every host blob this transport was handed, in order, tagged with the call
+   *  that carried it. A host asserts on these to check that what its pane
+   *  shows and what its session is told are the same thing. */
+  readonly hosts: Array<{ call: "start" | "open" | "fork" | "send"; host: unknown }>;
 }
 
 export function createFakeTransport(options: FakeTransportOptions = {}): FakeTransport {
@@ -99,6 +105,7 @@ export function createFakeTransport(options: FakeTransportOptions = {}): FakeTra
   const cancelled: Array<{ sessionId: string; turnId: string }> = [];
   const answered: Array<{ requestId: string; optionId: string | null }> = [];
   const forked: FakeTransport["forked"] = [];
+  const hosts: FakeTransport["hosts"] = [];
   /** Which conversation each session is writing into, so a second turn lands
    *  in the same one rather than minting another. */
   const conversationForSession = new Map<string, string>();
@@ -186,6 +193,7 @@ export function createFakeTransport(options: FakeTransportOptions = {}): FakeTra
     cancelled,
     answered,
     forked,
+    hosts,
 
     lastTurn() {
       const turn = turns[turns.length - 1];
@@ -216,18 +224,21 @@ export function createFakeTransport(options: FakeTransportOptions = {}): FakeTra
       conversations = conversations.filter((c) => c.conversation_id !== conversationId);
     },
 
-    start: async () => {
+    start: async (_backend, host) => {
+      hosts.push({ call: "start", host });
       if (options.startFails) throw new Error(options.startFails);
       return started(id("session"), null);
     },
 
-    openConversation: async (conversationId) => {
+    openConversation: async (conversationId, host) => {
+      hosts.push({ call: "open", host });
       const record = conversations.find((c) => c.conversation_id === conversationId);
       if (!record) throw new Error(`no such conversation: ${conversationId}`);
       return { ...started(id("session"), conversationId), messages: record.messages };
     },
 
-    forkConversation: async (conversationId, messageId, includeMessage) => {
+    forkConversation: async (conversationId, messageId, includeMessage, host) => {
+      hosts.push({ call: "fork", host });
       const source = conversations.find((c) => c.conversation_id === conversationId);
       if (!source) throw new Error(`no such conversation: ${conversationId}`);
       const index = source.messages.findIndex((m) => m.message_id === messageId);
@@ -266,8 +277,9 @@ export function createFakeTransport(options: FakeTransportOptions = {}): FakeTra
 
     newTurnId: () => id("turn"),
 
-    send: (sessionId, turnId, userMessageId, text, onUpdate, onDone) =>
+    send: (sessionId, turnId, userMessageId, text, host, onUpdate, onDone) =>
       new Promise<ChatSendResult>((resolve, reject) => {
+        hosts.push({ call: "send", host });
         // What the answer said, so the turn can be written into the fake's own
         // history when it ends. Without this the fake reports a conversation
         // id it does not hold, and every reader of that id — the history menu,
@@ -278,6 +290,7 @@ export function createFakeTransport(options: FakeTransportOptions = {}): FakeTra
           turnId,
           userMessageId,
           text,
+          host,
           emit: (update) => {
             if (update.kind === "text") answered += update.delta;
             onUpdate(update);

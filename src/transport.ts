@@ -19,6 +19,16 @@ import type {
  *  purpose — a backend that will not install, a permission request nobody
  *  answers, a subprocess that dies mid-turn.
  *
+ *  Several calls take a `host` blob. It is whatever the application wants its
+ *  `ChatHost` to know at that moment — which documents are in context, which
+ *  root to search — and nothing in this package reads it. It rides along
+ *  rather than being pushed through commands of the application's own because
+ *  the shell then has one place to apply it, and the client stays the single
+ *  owner of what is in context: every call that starts a session or a turn
+ *  carries the current answer, so a fresh subprocess and a live one are told
+ *  the same thing by the same code path. A host with no domain passes nothing
+ *  and the argument never reaches the wire.
+ *
  *  The one shape worth explaining is `send`. It takes the listeners rather than
  *  returning a stream because the listeners must be registered *before* the
  *  turn starts: an agent can answer faster than a promise resolves, and a
@@ -40,10 +50,10 @@ export interface ChatTransport {
   /** Start a subprocess and complete the ACP handshake. Rejects if the backend
    *  is installed but not usable — being logged out, most often — which is why
    *  this resolves after the handshake and not after the spawn. */
-  start(backend: AgentBackend): Promise<ChatStartResult>;
+  start(backend: AgentBackend, host?: unknown): Promise<ChatStartResult>;
 
   /** Reattach to the agent's own session for a saved conversation. */
-  openConversation(conversationId: string): Promise<ChatStartResult>;
+  openConversation(conversationId: string, host?: unknown): Promise<ChatStartResult>;
 
   /** Branch a conversation at one message into a new one, on a *fresh* agent
    *  session — not a resume. The point of a fork is to go where the original
@@ -57,6 +67,7 @@ export interface ChatTransport {
     conversationId: string,
     messageId: string,
     includeMessage: boolean,
+    host?: unknown,
   ): Promise<ChatStartResult>;
 
   close(sessionId: string): Promise<void>;
@@ -75,6 +86,7 @@ export interface ChatTransport {
     turnId: string,
     userMessageId: string,
     text: string,
+    host: unknown,
     onUpdate: (update: ChatUpdate) => void,
     onDone: (done: ChatDone) => void,
   ): Promise<ChatSendResult>;

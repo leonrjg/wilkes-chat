@@ -382,3 +382,30 @@ describe("saved chats", () => {
     await waitFor(() => expect(store.getState().conversations).toHaveLength(0));
   });
 });
+
+describe("what an application puts around the thread", () => {
+  it("keeps its context bar out of the transcript's scroll", async () => {
+    // The bar says what the *next* message will be answered from, so scrolling
+    // back through what was already said must not carry it off the screen.
+    await mount({
+      contextBar: <span>Answering from paper.pdf</span>,
+    });
+
+    const bar = await screen.findByText("Answering from paper.pdf");
+    expect(bar).toBeInTheDocument();
+    expect(bar.closest(".wilkes-chat__transcript")).toBeNull();
+  });
+
+  it("lets a host say something more useful than the keyboard hint", async () => {
+    await mount({ hint: <span>Answering about 2 documents</span> });
+
+    expect(await screen.findByText("Answering about 2 documents")).toBeInTheDocument();
+    expect(screen.queryByText(/Shift\+Enter/)).toBeNull();
+  });
+
+  it("falls back to the keyboard hint when it has nothing else to say", async () => {
+    await mount();
+
+    expect(await screen.findByText(/Shift\+Enter for a new line/)).toBeInTheDocument();
+  });
+});

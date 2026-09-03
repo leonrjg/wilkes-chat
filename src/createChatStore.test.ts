@@ -526,3 +526,61 @@ describe("resetting", () => {
     expect(store.getState().backend).toBeNull();
   });
 });
+
+describe("what the application tells its host", () => {
+  it("asks for the payload afresh on every call rather than once at wiring", async () => {
+    // The point of asking late: the answer is "which documents are in context
+    // *now*". A payload captured when the store was built would pin the
+    // session to whatever was open at startup.
+    let root = "/library/one";
+    build({}, { hostPayload: () => ({ root }) });
+
+    await store.getState().initialize();
+    root = "/library/two";
+    const sent = store.getState().sendMessage("Where am I looking?");
+    transport.lastTurn().finish();
+    await sent;
+
+    expect(transport.hosts).toEqual([
+      { call: "start", host: { root: "/library/one" } },
+      { call: "send", host: { root: "/library/two" } },
+    ]);
+  });
+
+  it("carries it into a branch, which starts a session of its own", async () => {
+    // A fork is a *new* subprocess. Without the payload it would open blind to
+    // the context the conversation it came from was answering about.
+    build({}, { hostPayload: () => ({ root: "/library" }) });
+    await store.getState().initialize();
+
+    const sent = store.getState().sendMessage("What is a monad?");
+    transport.lastTurn().emit({ kind: "text", delta: "A monoid." });
+    transport.lastTurn().finish();
+    await sent;
+
+    const question = store.getState().messages.find((m) => m.role === "user")!;
+    await store.getState().forkFromMessage(question.id);
+
+    expect(transport.hosts.map((entry) => entry.call)).toEqual([
+      "start",
+      "send",
+      "fork",
+      "send",
+    ]);
+    expect(transport.hosts.every((entry) => entry.host)).toBe(true);
+  });
+
+  it("sends no host argument at all when the application has no domain", async () => {
+    // A general chat must not have to declare an argument its commands do not
+    // take. `undefined` is what keeps it off the wire entirely.
+    await store.getState().initialize();
+    const sent = store.getState().sendMessage("Hello");
+    transport.lastTurn().finish();
+    await sent;
+
+    expect(transport.hosts).toEqual([
+      { call: "start", host: undefined },
+      { call: "send", host: undefined },
+    ]);
+  });
+});

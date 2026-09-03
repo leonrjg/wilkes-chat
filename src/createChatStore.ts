@@ -39,6 +39,19 @@ export interface ChatStoreOptions {
    *  as choosing one, and recording it as a choice would silently overwrite a
    *  preference the user set while their agent was briefly unavailable. */
   onBackendChosen?: (backend: AgentBackend) => void;
+  /** What the application wants its `ChatHost` to know, asked for afresh on
+   *  every call that starts a session or a turn.
+   *
+   *  A function rather than a value, and asked for at the last moment, because
+   *  it is the answer *now*: which documents are in context, which root to
+   *  search. Sending it with each call is what makes the client the single
+   *  owner of that state — a session started five minutes ago and one starting
+   *  now are told the same thing by the same code path, so there is no separate
+   *  push to keep in step and nothing to replay after a backend switch.
+   *
+   *  Nothing here reads the value. A chat with no application behind it omits
+   *  this, and no host argument reaches the wire at all. */
+  hostPayload?: () => unknown;
   /** Reported instead of thrown for the failures a caller cannot act on —
    *  refreshing history, closing a replaced session. Defaults to
    *  `console.error`. */
@@ -143,7 +156,7 @@ const CLEARED_SESSION = {
 };
 
 export function createChatStore(options: ChatStoreOptions): ChatStore {
-  const { transport } = options;
+  const { transport, hostPayload } = options;
   const report =
     options.onBackgroundError ??
     ((context: string, error: unknown) => console.error(`chat: ${context}`, error));
@@ -288,7 +301,7 @@ export function createChatStore(options: ChatStoreOptions): ChatStore {
 
         let started: ChatStartResult;
         try {
-          started = await transport.start(backend);
+          started = await transport.start(backend, hostPayload?.());
         } catch (error) {
           // Only report onto a session the user is still waiting for: a second
           // switch may have overtaken this one, and its failure is not news
@@ -326,6 +339,7 @@ export function createChatStore(options: ChatStoreOptions): ChatStore {
           conversationId,
           messageId,
           message.role === "assistant",
+          hostPayload?.(),
         );
         closeOpenSession();
         adopt(started, backend);
@@ -353,7 +367,12 @@ export function createChatStore(options: ChatStoreOptions): ChatStore {
         const edited = text.trim();
         if (!edited) return;
 
-        const started = await transport.forkConversation(conversationId, messageId, false);
+        const started = await transport.forkConversation(
+          conversationId,
+          messageId,
+          false,
+          hostPayload?.(),
+        );
         closeOpenSession();
         adopt(started, backend);
         get()
@@ -381,7 +400,7 @@ export function createChatStore(options: ChatStoreOptions): ChatStore {
         });
 
         try {
-          const started = await transport.openConversation(conversationId);
+          const started = await transport.openConversation(conversationId, hostPayload?.());
           if (get().conversationId !== conversationId) {
             transport
               .close(started.session_id)
@@ -476,6 +495,7 @@ export function createChatStore(options: ChatStoreOptions): ChatStore {
             turnId,
             sent.id,
             text,
+            hostPayload?.(),
             (update) => patchAnswer((m) => applyUpdate(m, update)),
             () => finish((m) => m),
           );

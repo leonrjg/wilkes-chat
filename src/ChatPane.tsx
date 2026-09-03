@@ -35,6 +35,16 @@ export interface ChatPaneProps {
   /** Shown in an empty transcript. A general chat has nothing to say about
    *  itself, so a host that has something says it here. */
   emptyState?: React.ReactNode;
+  /** A band between the header and the transcript, for whatever the
+   *  application says this conversation is about — the documents it is
+   *  answering from, the root it is searching. It sits above the transcript
+   *  and outside its scroll because it describes the *next* turn, not the
+   *  turns already taken, and scrolling back through the thread must not take
+   *  it off the screen. */
+  contextBar?: React.ReactNode;
+  /** Replaces the composer's keyboard hint. A host with something more useful
+   *  to say there — what this message will be answered from — says it. */
+  hint?: React.ReactNode;
   className?: string;
 }
 
@@ -51,6 +61,8 @@ export function ChatPane({
   confirmDelete,
   placeholder = "Ask anything…",
   emptyState,
+  contextBar,
+  hint,
   className,
 }: ChatPaneProps) {
   const transcriptRef = useRef<HTMLDivElement>(null);
@@ -307,6 +319,8 @@ export function ChatPane({
         </div>
       )}
 
+      {contextBar && <div className="wilkes-chat__context-bar">{contextBar}</div>}
+
       {starting && (
         <div className="wilkes-chat__banner">Starting the agent…</div>
       )}
@@ -449,7 +463,7 @@ export function ChatPane({
         />
         <div className="wilkes-chat__composer-actions">
           <span className="wilkes-chat__dim wilkes-chat__hint">
-            Enter to send · Shift+Enter for a new line
+            {hint ?? "Enter to send · Shift+Enter for a new line"}
           </span>
           {streaming ? (
             <button
