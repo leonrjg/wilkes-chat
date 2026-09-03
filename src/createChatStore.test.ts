@@ -584,3 +584,89 @@ describe("what the application tells its host", () => {
     ]);
   });
 });
+
+describe("branching back into the state a question was asked in", () => {
+  const asked: ChatConversationRecord = {
+    conversation_id: "c1",
+    backend: "ClaudeCode",
+    backend_session_id: "b1",
+    cwd: "/tmp/chat",
+    title: "About the paper",
+    created_at: "2026-09-01T10:00:00Z",
+    updated_at: "2026-09-01T10:00:00Z",
+    last_opened_at: "2026-09-01T10:00:00Z",
+    config_values: [],
+    messages: [
+      {
+        message_id: "m1",
+        turn_id: "t1",
+        role: "user",
+        thought: "",
+        content: [{ kind: "text", text: "What does it say?" }],
+        error: null,
+        environment: { config_values: [], host: { documents: ["paper.pdf"] } },
+      },
+      {
+        message_id: "t1",
+        turn_id: "t1",
+        role: "assistant",
+        thought: "",
+        content: [{ kind: "text", text: "It says a lot." }],
+        error: null,
+      },
+    ],
+  };
+
+  it("restores the application first, so the payload it then sends is the old one", async () => {
+    // Not an override handed to the shell: the application puts *itself* back,
+    // so its pane and its session agree about what the branch is about.
+    let documents = ["today.pdf"];
+    build(
+      { conversations: [asked] },
+      {
+        hostPayload: () => ({ documents }),
+        onHostRestore: (host) => {
+          documents = (host as { documents: string[] }).documents;
+        },
+      },
+    );
+    await store.getState().initialize();
+    // Reopening restores it too — the same rule, and the reason a saved chat
+    // comes back showing what it was about.
+    await store.getState().openConversation("c1");
+    documents = ["today.pdf"];
+    await store.getState().forkFromMessage("m1");
+
+    expect(documents).toEqual(["paper.pdf"]);
+    expect(transport.hosts.find((entry) => entry.call === "fork")?.host).toEqual({
+      documents: ["paper.pdf"],
+    });
+  });
+
+  it("reaches past an answer to the question that carried the state", async () => {
+    // Only the user message that opened a turn has an environment, so a branch
+    // taken from the answer has to look back to find one.
+    const restored: unknown[] = [];
+    build({ conversations: [asked] }, { onHostRestore: (host) => restored.push(host) });
+    await store.getState().initialize();
+    await store.getState().openConversation("c1");
+    restored.length = 0;
+    await store.getState().forkFromMessage("t1");
+
+    expect(restored).toEqual([{ documents: ["paper.pdf"] }]);
+  });
+
+  it("says nothing when the stored turn carried no state of its own", async () => {
+    const bare: ChatConversationRecord = {
+      ...asked,
+      messages: [{ ...asked.messages[0], environment: { config_values: [] } }],
+    };
+    const onHostRestore = vi.fn();
+    build({ conversations: [bare] }, { onHostRestore });
+    await store.getState().initialize();
+    await store.getState().openConversation("c1");
+    await store.getState().forkFromMessage("m1");
+
+    expect(onHostRestore).not.toHaveBeenCalled();
+  });
+});

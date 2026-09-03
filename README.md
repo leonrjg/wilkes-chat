@@ -64,6 +64,15 @@ path, so there is one owner and nothing to keep in step.
 A host with no domain passes no `hostPayload`, and no such argument reaches the
 wire at all — a general chat's commands never have to declare one.
 
+The store keeps what each turn was sent under, in `ChatTurnEnvironment.host`,
+and hands it back through `onHostRestore` just before a conversation is
+reopened or branched. That is what makes a branch reopen on the documents its
+question was asked about rather than on whatever is open today. It is a
+*restore* and not an override: the application puts itself back into that
+state, and the payload the next `hostPayload()` returns is the restored one —
+so the pane and the session still agree, and there is still only one thing
+deciding what the chat is about.
+
 `ChatPane` takes the two slots that go with it: `contextBar`, a band between
 the header and the transcript for what the next message will be answered from,
 and `hint`, which replaces the composer's keyboard hint. The bar sits outside

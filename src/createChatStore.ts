@@ -52,6 +52,20 @@ export interface ChatStoreOptions {
    *  Nothing here reads the value. A chat with no application behind it omits
    *  this, and no host argument reaches the wire at all. */
   hostPayload?: () => unknown;
+  /** Hand back the host blob a stored turn was sent under, so the application
+   *  can put itself into that state before the call that needs it.
+   *
+   *  Called just before a conversation is reopened or branched, and never for
+   *  a turn happening now. It is what makes a branch reopen on the documents
+   *  its question was asked about rather than on whatever is open today —
+   *  taken from the history this store already holds, not from a second copy
+   *  the shell keeps.
+   *
+   *  Deliberately a *restore*, not an override: the application updates its own
+   *  state, so the payload the very next `hostPayload()` returns is the
+   *  restored one, and the client stays the single thing that decides what the
+   *  chat is about. Nothing is passed when the stored turn carried no blob. */
+  onHostRestore?: (host: unknown) => void;
   /** Reported instead of thrown for the failures a caller cannot act on —
    *  refreshing history, closing a replaced session. Defaults to
    *  `console.error`. */
@@ -140,6 +154,27 @@ function pickBackend(
   return backends.find((b) => b.available)?.backend ?? null;
 }
 
+/** What the last turn up to `messageId` was sent under, from the records this
+ *  store already holds. Searches backwards because only the user message that
+ *  opened a turn carries an environment, and a branch taken from an answer has
+ *  to reach past it to the question. */
+function storedHost(
+  conversations: ChatConversationRecord[],
+  conversationId: string,
+  messageId?: string,
+): unknown {
+  const record = conversations.find((c) => c.conversation_id === conversationId);
+  if (!record) return undefined;
+  const upTo = messageId
+    ? record.messages.slice(0, record.messages.findIndex((m) => m.message_id === messageId) + 1)
+    : record.messages;
+  for (let i = upTo.length - 1; i >= 0; i--) {
+    const host = upTo[i].environment?.host;
+    if (host !== undefined && host !== null) return host;
+  }
+  return undefined;
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -156,7 +191,7 @@ const CLEARED_SESSION = {
 };
 
 export function createChatStore(options: ChatStoreOptions): ChatStore {
-  const { transport, hostPayload } = options;
+  const { transport, hostPayload, onHostRestore } = options;
   const report =
     options.onBackgroundError ??
     ((context: string, error: unknown) => console.error(`chat: ${context}`, error));
@@ -165,6 +200,18 @@ export function createChatStore(options: ChatStoreOptions): ChatStore {
   // replaced. Wilkes leaked these — one pair per session for the life of the
   // window — which is invisible until someone switches agents in a loop.
   let unsubscribes: Array<() => void> = [];
+
+  /** Put the application back into the state a stored turn was sent under,
+   *  before the call that reopens it. */
+  function restoreHostAt(
+    conversations: ChatConversationRecord[],
+    conversationId: string,
+    messageId?: string,
+  ) {
+    if (!onHostRestore) return;
+    const host = storedHost(conversations, conversationId, messageId);
+    if (host !== undefined) onHostRestore(host);
+  }
 
   function releaseSubscriptions() {
     for (const unsubscribe of unsubscribes) unsubscribe();
@@ -335,6 +382,7 @@ export function createChatStore(options: ChatStoreOptions): ChatStore {
         // the record on disk, and a backend that keeps no record has none.
         if (!conversationId || !message || streaming || !backend) return;
 
+        restoreHostAt(get().conversations, conversationId, messageId);
         const started = await transport.forkConversation(
           conversationId,
           messageId,
@@ -367,6 +415,7 @@ export function createChatStore(options: ChatStoreOptions): ChatStore {
         const edited = text.trim();
         if (!edited) return;
 
+        restoreHostAt(get().conversations, conversationId, messageId);
         const started = await transport.forkConversation(
           conversationId,
           messageId,
@@ -400,6 +449,7 @@ export function createChatStore(options: ChatStoreOptions): ChatStore {
         });
 
         try {
+          restoreHostAt(get().conversations, conversationId);
           const started = await transport.openConversation(conversationId, hostPayload?.());
           if (get().conversationId !== conversationId) {
             transport
