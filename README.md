@@ -2,7 +2,7 @@
 
 The chat that talks to a coding agent over [ACP](https://agentclientprotocol.com),
 extracted from [Wilkes](https://github.com/leonrjg/Wilkes) so it is not one
-application's feature. Two halves of one contract, shipped together:
+application's feature — and now the only copy either of them runs. Two halves of one contract, shipped together:
 
 | | |
 | --- | --- |
@@ -256,6 +256,10 @@ answering a different question from the one being branched.
 - **Wilkes' MCP server, readers and search** stayed in Wilkes. They are the
   application, and they now reach a session through `ChatHost` like anything
   else would.
-- **Wilkes still has its own copy of the chat.** This extraction does not
-  modify Wilkes; adopting it there is a separate change, and it is the one
-  that turns two copies back into one.
+- **A backend not in `AgentBackend`.** The enum is closed on purpose: each
+  variant names an adapter this crate has been checked against at a pinned
+  version, and "which adapter" is not meant to be a runtime question.
+
+Both hosts now run on this: Wilkes through a `WilkesChatHost` that answers all
+five questions, and Eos through `NoHost`, which answers none and is a complete
+host rather than a stub.
