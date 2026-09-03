@@ -2,7 +2,8 @@
 
 The chat that talks to a coding agent over [ACP](https://agentclientprotocol.com),
 extracted from [Wilkes](https://github.com/leonrjg/Wilkes) so it is not one
-application's feature — and now the only copy either of them runs. Two halves of one contract, shipped together:
+application's feature — and now the only copy either of them runs. Two
+halves of one contract, shipped together:
 
 | | |
 | --- | --- |
