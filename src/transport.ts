@@ -7,7 +7,7 @@ import type {
   ChatSendResult,
   ChatStartResult,
   ChatUpdate,
-} from "./types";
+} from "./types.js";
 
 /** How the client reaches the sessions.
  *

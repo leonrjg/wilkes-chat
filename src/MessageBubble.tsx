@@ -2,15 +2,15 @@ import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-import { BranchIcon, CheckIcon, ChevronIcon, CopyIcon, EditIcon, ToolIcon } from "./icons";
+import { BranchIcon, CheckIcon, ChevronIcon, CopyIcon, EditIcon, ToolIcon } from "./icons.js";
 import {
   messageElapsedLabel,
   messageText,
   type ChatMessage,
   type ChatPermissionPrompt,
   type ChatToolChip,
-} from "./transcript";
-import type { ChatPermissionOption, ChatToolLocation } from "./types";
+} from "./transcript.js";
+import type { ChatPermissionOption, ChatToolLocation } from "./types.js";
 
 function toolStatusMark(status: string) {
   if (status === "completed") return "✓";

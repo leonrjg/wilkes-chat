@@ -9,16 +9,16 @@
 // desktop implementation is a separate entry point (`@leonrjg/wilkes-chat/tauri`)
 // so `@tauri-apps/api` stays optional for hosts that are not desktop.
 
-export { ChatPane } from "./ChatPane";
-export type { ChatPaneProps } from "./ChatPane";
-export { MessageBubble } from "./MessageBubble";
-export type { MessageBubbleProps } from "./MessageBubble";
+export { ChatPane } from "./ChatPane.js";
+export type { ChatPaneProps } from "./ChatPane.js";
+export { MessageBubble } from "./MessageBubble.js";
+export type { MessageBubbleProps } from "./MessageBubble.js";
 
-export { createChatStore } from "./createChatStore";
-export type { ChatState, ChatStore, ChatStoreOptions } from "./createChatStore";
+export { createChatStore } from "./createChatStore.js";
+export type { ChatState, ChatStore, ChatStoreOptions } from "./createChatStore.js";
 
-export { CHAT_COMMANDS, chatChannel } from "./transport";
-export type { ChatCommand, ChatTransport } from "./transport";
+export { CHAT_COMMANDS, chatChannel } from "./transport.js";
+export type { ChatCommand, ChatTransport } from "./transport.js";
 
 export {
   applyUpdate,
@@ -33,14 +33,14 @@ export {
   messageText,
   shouldStickToBottom,
   userMessage,
-} from "./transcript";
+} from "./transcript.js";
 export type {
   ChatMessage,
   ChatMessageContentBlock,
   ChatPermissionPrompt,
   ChatToolChip,
   ScrollExtent,
-} from "./transcript";
+} from "./transcript.js";
 
 export type {
   AgentBackend,
@@ -61,4 +61,4 @@ export type {
   ChatToolLocation,
   ChatTurnEnvironment,
   ChatUpdate,
-} from "./types";
+} from "./types.js";

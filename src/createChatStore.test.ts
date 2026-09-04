@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createChatStore, type ChatStore } from "./createChatStore";
-import { backendStatus, createFakeTransport, type FakeTransport } from "./testing/fakeTransport";
-import { messageText } from "./transcript";
-import type { ChatConversationRecord } from "./types";
+import { createChatStore, type ChatStore } from "./createChatStore.js";
+import { backendStatus, createFakeTransport, type FakeTransport } from "./testing/fakeTransport.js";
+import { messageText } from "./transcript.js";
+import type { ChatConversationRecord } from "./types.js";
 
 let transport: FakeTransport;
 let store: ChatStore;

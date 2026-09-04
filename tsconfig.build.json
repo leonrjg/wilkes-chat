@@ -1,6 +1,15 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    // The published `dist` is real ESM — `package.json` says `"type":
+    // "module"` — so Node's resolver applies to it, and Node's resolver does
+    // not guess extensions. The editor's `bundler` resolution would let an
+    // extensionless relative import through and TypeScript would emit it
+    // verbatim; the failure then lands on whoever installs the package rather
+    // than on whoever wrote the import. Building under NodeNext is what makes
+    // the missing extension a compile error here instead.
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "noEmit": false,
     "declaration": true,
     "declarationMap": true,

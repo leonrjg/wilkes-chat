@@ -11,7 +11,7 @@ import type {
   ChatToolContentBlock,
   ChatToolLocation,
   ChatUpdate,
-} from "./types";
+} from "./types.js";
 
 export interface ChatToolChip {
   toolCallId: string;

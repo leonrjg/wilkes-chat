@@ -10,7 +10,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
-import { chatChannel, type ChatTransport } from "./transport";
+import { chatChannel, type ChatTransport } from "./transport.js";
 import type {
   AgentBackend,
   BackendStatus,
@@ -20,7 +20,7 @@ import type {
   ChatSendResult,
   ChatStartResult,
   ChatUpdate,
-} from "./types";
+} from "./types.js";
 
 /** A random id for a turn or a message.
  *

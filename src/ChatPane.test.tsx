@@ -2,9 +2,9 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { ChatPane } from "./ChatPane";
-import { createChatStore, type ChatStore } from "./createChatStore";
-import { backendStatus, createFakeTransport, type FakeTransport } from "./testing/fakeTransport";
+import { ChatPane } from "./ChatPane.js";
+import { createChatStore, type ChatStore } from "./createChatStore.js";
+import { backendStatus, createFakeTransport, type FakeTransport } from "./testing/fakeTransport.js";
 
 let transport: FakeTransport;
 let store: ChatStore;

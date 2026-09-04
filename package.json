@@ -1,6 +1,6 @@
 {
   "name": "@leonrjg/wilkes-chat",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "An ACP chat client shared between applications: the store, the pane, and the Tauri transport for the Rust crate that ships beside them.",
   "license": "MIT",
   "repository": "github:leonrjg/wilkes-chat",

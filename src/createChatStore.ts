@@ -6,7 +6,7 @@
 
 import { create, type StoreApi, type UseBoundStore } from "zustand";
 
-import type { ChatTransport } from "./transport";
+import type { ChatTransport } from "./transport.js";
 import {
   applyUpdate,
   dismissUndecided,
@@ -16,14 +16,14 @@ import {
   userMessage,
   type ChatMessage,
   type ChatPermissionPrompt,
-} from "./transcript";
+} from "./transcript.js";
 import type {
   AgentBackend,
   BackendStatus,
   ChatConfigOption,
   ChatConversationRecord,
   ChatStartResult,
-} from "./types";
+} from "./types.js";
 
 export interface ChatStoreOptions {
   transport: ChatTransport;

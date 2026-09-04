@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import { MessageBubble } from "./MessageBubble";
+import { MessageBubble } from "./MessageBubble.js";
 import {
   CheckIcon,
   ClockIcon,
@@ -12,14 +12,14 @@ import {
   SendIcon,
   StopIcon,
   TrashIcon,
-} from "./icons";
+} from "./icons.js";
 import {
   formatConversationDate,
   isScrollUpKey,
   shouldStickToBottom,
-} from "./transcript";
-import type { ChatStore } from "./createChatStore";
-import type { AgentBackend, ChatToolLocation } from "./types";
+} from "./transcript.js";
+import type { ChatStore } from "./createChatStore.js";
+import type { AgentBackend, ChatToolLocation } from "./types.js";
 
 export interface ChatPaneProps {
   store: ChatStore;

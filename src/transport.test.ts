@@ -3,7 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 
-import { CHAT_COMMANDS, chatChannel } from "./transport";
+import { CHAT_COMMANDS, chatChannel } from "./transport.js";
 
 const calls: Array<{ command: string; args: Record<string, unknown> }> = [];
 
@@ -63,7 +63,7 @@ describe("the host blob on the wire", () => {
     // A general-purpose chat's commands do not declare a `host` argument.
     // Sending `host: null` would make them fail to deserialize on hosts that
     // never asked for one — so the key must not be there at all.
-    const { tauriChatTransport } = await import("./tauri");
+    const { tauriChatTransport } = await import("./tauri.js");
     calls.length = 0;
     const transport = tauriChatTransport();
 
@@ -84,7 +84,7 @@ describe("the host blob on the wire", () => {
   it("rides along under one agreed name when there is one", async () => {
     // One name, chosen here, for every call that carries it: the shell has a
     // single argument to accept and a single place to apply it.
-    const { tauriChatTransport } = await import("./tauri");
+    const { tauriChatTransport } = await import("./tauri.js");
     calls.length = 0;
     const transport = tauriChatTransport();
     const host = { root: "/library", documents: ["a.pdf"] };

@@ -10,7 +10,7 @@ import {
   shouldStickToBottom,
   userMessage,
   type ChatMessage,
-} from "./transcript";
+} from "./transcript.js";
 
 function answer(): ChatMessage {
   return emptyAssistantMessage("t1", 0);

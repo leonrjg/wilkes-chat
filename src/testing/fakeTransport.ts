@@ -9,7 +9,7 @@
 // Turns do not resolve on their own. `respond`, `emit` and `finish` drive
 // them, so a test says exactly when each chunk lands.
 
-import type { ChatTransport } from "../transport";
+import type { ChatTransport } from "../transport.js";
 import type {
   AgentBackend,
   BackendStatus,
@@ -20,7 +20,7 @@ import type {
   ChatSendResult,
   ChatStartResult,
   ChatUpdate,
-} from "../types";
+} from "../types.js";
 
 /** One fixed timestamp. A fake that used the clock would make a snapshot test
  *  of the history menu fail once a day at midnight. */
