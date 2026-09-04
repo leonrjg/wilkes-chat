@@ -126,11 +126,21 @@ being one.
 
 ### Using it
 
-**Rust.** One workspace member, or a path dependency while the repository is
-unpublished:
+**Rust.** A git dependency, pinned to a tag — a dependency that moves under a
+build is a build that changes without a commit saying so:
 
 ```toml
-wilkes-chat = { path = "../wilkes-chat/crates/wilkes-chat" }
+wilkes-chat = { git = "https://github.com/leonrjg/wilkes-chat", tag = "v0.1.1" }
+```
+
+Cargo's bundled libgit2 may fail to authenticate against this repository even
+though it is public, when a credential helper offers it something it cannot
+use. The git CLI clones it without trouble, so hand the fetch to it:
+
+```toml
+# .cargo/config.toml
+[net]
+git-fetch-with-cli = true
 ```
 
 A session, in full:
@@ -153,7 +163,7 @@ and does nothing else to it.
 **TypeScript.**
 
 ```
-npm install github:leonrjg/wilkes-chat#v0.1.0
+npm install github:leonrjg/wilkes-chat#v0.1.1
 ```
 
 `react`, `react-dom` and `zustand` are peer dependencies; `@tauri-apps/api` is
