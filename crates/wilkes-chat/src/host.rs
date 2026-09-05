@@ -101,6 +101,11 @@ pub trait ChatHost: Send + Sync + 'static {
     /// [`Self::context_block`] pushed. Without this a resumed conversation
     /// shows the user their own message with the machinery stapled to the
     /// front of it. Return `None` when the text carries no block.
+    ///
+    /// The host's own block, and only that. The blocks this crate pushes of
+    /// its own accord — the branched-from dialogue, the user's standing
+    /// instructions — are already gone by the time this is called: a host
+    /// cannot be asked to undo something it never asked to have sent.
     fn strip_context_block(&self, text: &str) -> Option<String> {
         let _ = text;
         None
