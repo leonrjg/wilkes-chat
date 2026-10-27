@@ -409,3 +409,27 @@ describe("what an application puts around the thread", () => {
     expect(await screen.findByText(/Shift\+Enter for a new line/)).toBeInTheDocument();
   });
 });
+
+describe("beside another pane", () => {
+  it("names its own agent selector, not the first pane's", async () => {
+    // A host can show several chats at once; each label must reach its own
+    // pane's selector.
+    const other = createChatStore({ transport, onBackgroundError: () => {} });
+    render(
+      <>
+        <div data-testid="first">
+          <ChatPane store={store} />
+        </div>
+        <div data-testid="second">
+          <ChatPane store={other} />
+        </div>
+      </>,
+    );
+    await waitFor(() => expect(store.getState().backendsLoaded).toBe(true));
+
+    const first = within(screen.getByTestId("first")).getByLabelText("Agent");
+    const second = within(screen.getByTestId("second")).getByLabelText("Agent");
+    expect(first).not.toBe(second);
+    expect(screen.getByTestId("second")).toContainElement(second);
+  });
+});

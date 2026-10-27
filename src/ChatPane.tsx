@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { MessageBubble } from "./MessageBubble.js";
 import {
@@ -71,6 +71,9 @@ export function ChatPane({
   const lastScrollTopRef = useRef(0);
   const lastTouchYRef = useRef<number | null>(null);
   const [draft, setDraft] = useState("");
+  // Per pane: a host may show several chats side by side, and a fixed id
+  // would tie every pane's "Agent" label to the first pane's selector.
+  const agentSelectId = useId();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [copiedSessionId, setCopiedSessionId] = useState(false);
 
@@ -158,11 +161,11 @@ export function ChatPane({
             className={`wilkes-chat__status-dot${activeBackend?.available ? " wilkes-chat__status-dot--on" : ""}`}
             aria-hidden="true"
           />
-          <label className="wilkes-chat__visually-hidden" htmlFor="wilkes-chat-agent">
+          <label className="wilkes-chat__visually-hidden" htmlFor={agentSelectId}>
             Agent
           </label>
           <select
-            id="wilkes-chat-agent"
+            id={agentSelectId}
             className="wilkes-chat__select wilkes-chat__select--agent"
             value={backend ?? ""}
             disabled={starting || streaming}
