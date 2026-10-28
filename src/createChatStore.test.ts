@@ -552,9 +552,9 @@ describe("an agent that is not logged in", () => {
     expect(store.getState().messages.at(-1)?.error).toBe("Authentication required");
   });
 
-  it("logs in, reopens the conversation on a fresh session and hands the question back", async () => {
+  it("logs in, starts a new chat and hands the question back", async () => {
     await refused();
-    const { sessionId, conversationId } = store.getState();
+    const { sessionId } = store.getState();
 
     const loggingIn = store.getState().logIn("claude-ai-login");
     expect(store.getState().login?.running).toBe(true);
@@ -562,10 +562,13 @@ describe("an agent that is not logged in", () => {
     transport.logins[0].succeed();
     await loggingIn;
 
-    // The session that refused was started logged out; a fresh one is not.
+    // Not the refused conversation reopened: resuming it would bring back an
+    // agent that thinks it has already announced tools the model never saw.
     expect(transport.closed).toContain(sessionId);
     expect(store.getState().sessionId).not.toBe(sessionId);
-    expect(store.getState().conversationId).toBe(conversationId);
+    expect(store.getState().conversationId).toBeNull();
+    expect(store.getState().messages).toEqual([]);
+    expect(transport.hosts.map((h) => h.call)).not.toContain("open");
     expect(store.getState().login).toBeNull();
     expect(store.getState().takeDraftToRestore()).toBe(question);
     expect(store.getState().takeDraftToRestore()).toBeNull();
@@ -621,7 +624,7 @@ describe("an agent that is not logged in", () => {
 });
 
 describe("signing out", () => {
-  it("logs the agent out and reopens on a session that knows it", async () => {
+  it("logs the agent out and starts a new chat on a session that knows it", async () => {
     build({ auth: CLAUDE_AUTH });
     await store.getState().initialize();
     const { sessionId } = store.getState();

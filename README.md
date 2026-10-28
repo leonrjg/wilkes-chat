@@ -146,10 +146,13 @@ stops it too. The adapter also advertises an absolute command for the same
 login, but it names the node binary and npx cache directory of the process
 that answered, and running it would be a second way of launching the adapter.
 
-The session that refused was started logged out, so after a login the store
-reopens the conversation on a fresh one and puts the refused message back in
-the composer. `log_out` goes through ACP's `logout`, where the agent says it
-answers it, and ends the same way.
+After a login the store starts a new chat on a fresh session and puts the
+refused message back in the composer. A new chat, not the refused one
+reopened: the agent never saw the turn it refused, but Claude Code counts the
+MCP tools it announced on that turn as announced, so a resumed conversation
+answers without the host's tools. `log_out` goes through ACP's `logout`, where
+the agent says it answers it, and ends the same way — which also keeps the
+next refused turn out of the chat that was open.
 
 An agent whose logins are not `terminal` ones — completed by an `authenticate`
 request, or by a secret the client would have to hold — is offered none here;

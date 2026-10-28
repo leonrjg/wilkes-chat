@@ -156,13 +156,18 @@ export interface ChatState {
     option: ChatPermissionPrompt["options"][number] | null,
   ) => Promise<void>;
   cancel: () => Promise<void>;
-  /** Run one of the logins in `auth`, then reopen the conversation on a fresh
-   *  session — the one that refused was started logged out, and an agent may
-   *  keep what it started with. */
+  /** Run one of the logins in `auth`, then start a new chat on a fresh
+   *  session, with the refused message back in the composer.
+   *
+   *  A new chat and not the refused one reopened: the agent never saw the
+   *  turn it refused, but Claude Code counts the tools it announced on that
+   *  turn as already announced, so a resumed conversation answers without
+   *  them. A new session announces everything. */
   logIn: (methodId: string) => Promise<void>;
   cancelLogIn: () => Promise<void>;
-  /** Log the agent out, then reopen the conversation on a fresh session so
-   *  the pane and the agent agree that nobody is logged in. */
+  /** Log the agent out, then start a new chat on a fresh session, so the pane
+   *  and the agent agree that nobody is logged in — and so the turn refused
+   *  next lands in a chat of its own rather than in the one that was open. */
   logOut: () => Promise<void>;
   /** Read `draftToRestore` and clear it, so it is put back exactly once. */
   takeDraftToRestore: () => string | null;
@@ -301,13 +306,6 @@ export function createChatStore(options: ChatStoreOptions): ChatStore {
       subscribe(started.session_id).catch((error) =>
         report("subscribing to the session failed", error),
       );
-    }
-
-    /** A fresh session in place of the open one, on its conversation when it
-     *  has one. Failures are already on `sessionError` when this rejects. */
-    async function reopen(backend: AgentBackend, conversationId: string | null) {
-      if (conversationId) await get().openConversation(conversationId);
-      else await get().switchBackend(backend, { remember: false });
     }
 
     return {
@@ -654,7 +652,7 @@ export function createChatStore(options: ChatStoreOptions): ChatStore {
       },
 
       logIn: async (methodId) => {
-        const { sessionId, backend, conversationId, login } = get();
+        const { sessionId, backend, login } = get();
         if (!sessionId || !backend || !login || login.running) return;
         set({ login: { ...login, running: true } });
 
@@ -673,11 +671,13 @@ export function createChatStore(options: ChatStoreOptions): ChatStore {
           return;
         }
 
-        // Before the reopen, which clears the session but not this.
+        // Before the new chat, which clears the session but not this.
         set({ draftToRestore: login.prompt });
-        await reopen(backend, conversationId).catch(() => {
-          /* surfaced as `sessionError` by the reopen */
-        });
+        await get()
+          .switchBackend(backend, { remember: false })
+          .catch(() => {
+            /* surfaced as `sessionError` by switchBackend */
+          });
       },
 
       cancelLogIn: async () => {
@@ -689,7 +689,7 @@ export function createChatStore(options: ChatStoreOptions): ChatStore {
       },
 
       logOut: async () => {
-        const { sessionId, backend, conversationId, auth, streaming } = get();
+        const { sessionId, backend, auth, streaming } = get();
         if (!sessionId || !backend || !auth.can_log_out || streaming) return;
         try {
           await transport.logOut(sessionId);
@@ -698,9 +698,9 @@ export function createChatStore(options: ChatStoreOptions): ChatStore {
           return;
         }
         try {
-          await reopen(backend, conversationId);
+          await get().switchBackend(backend, { remember: false });
         } catch {
-          return; // surfaced as `sessionError` by the reopen
+          return; // surfaced as `sessionError` by switchBackend
         }
         // Said now rather than on the next refused turn, so signing out is
         // seen to have done something and the way back in is right there.

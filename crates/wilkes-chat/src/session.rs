@@ -621,7 +621,9 @@ impl ChatSession {
     ///
     /// This session's subprocess is not told: it was started logged out and
     /// an agent may hold on to that, so a host follows a successful login by
-    /// opening a fresh session. One login at a time; [`ChatSession::cancel_log_in`]
+    /// opening a fresh session — a new one rather than this conversation
+    /// resumed, because Claude Code counts the tools it announced on the
+    /// refused turn as announced, and the model never saw them. One login at a time; [`ChatSession::cancel_log_in`]
     /// and [`ChatSession::close`] both stop it.
     pub async fn log_in(&self, method_id: &str) -> anyhow::Result<LoginOutcome> {
         let method = self.auth.method(method_id).cloned().ok_or_else(|| {

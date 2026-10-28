@@ -18,13 +18,24 @@ async fn a_logged_out_claude_offers_its_logins_and_fails_the_turn_as_auth_requir
     let cwd = tempfile::tempdir().unwrap();
     std::env::set_var("CLAUDE_CONFIG_DIR", config.path());
 
-    let spawned = spawn(SpawnOptions::new(AgentBackend::ClaudeCode, cwd.path().into()))
-        .await
-        .expect("a logged-out agent still completes the handshake");
+    let spawned = spawn(SpawnOptions::new(
+        AgentBackend::ClaudeCode,
+        cwd.path().into(),
+    ))
+    .await
+    .expect("a logged-out agent still completes the handshake");
     let session = spawned.session;
 
-    let ids: Vec<&str> = session.auth().methods.iter().map(|m| m.id.as_str()).collect();
-    println!("offered logins: {ids:?}, logout: {}", session.auth().can_log_out);
+    let ids: Vec<&str> = session
+        .auth()
+        .methods
+        .iter()
+        .map(|m| m.id.as_str())
+        .collect();
+    println!(
+        "offered logins: {ids:?}, logout: {}",
+        session.auth().can_log_out
+    );
     assert!(ids.contains(&"claude-ai-login"), "{ids:?}");
     assert!(session.auth().can_log_out);
 
@@ -33,18 +44,8 @@ async fn a_logged_out_claude_offers_its_logins_and_fails_the_turn_as_auth_requir
         other => panic!("expected auth_required, got {other:?}"),
     }
 
-    // What a window does after the user logs in: reopen the conversation the
-    // failed turn was recorded in. It has to open even though its only turn
-    // was refused.
-    let backend_session_id = session.backend_session_id().to_string();
+    // The refused conversation is not reopened after a login: Claude Code
+    // counts the tools it announced on the refused turn as announced, and the
+    // model never saw them. The store starts a new chat instead.
     session.close();
-    let reopened = spawn(
-        SpawnOptions::new(AgentBackend::ClaudeCode, cwd.path().into()).load(backend_session_id),
-    )
-    .await;
-    match &reopened {
-        Ok(spawned) => println!("reopened, replaying {:?}", spawned.replay_messages),
-        Err(e) => println!("reopen failed: {e:#}"),
-    }
-    reopened.expect("the refused conversation reopens");
 }
