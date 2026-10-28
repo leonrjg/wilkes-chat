@@ -15,7 +15,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::session::{
-    ChatConfigOption, ChatEvent, ChatLocation, ChatPermissionOption, ChatToolContent,
+    ChatConfigOption, ChatEvent, ChatLocation, ChatPermissionOption, ChatToolContent, TurnError,
 };
 
 /// One update within a turn, as the client receives it.
@@ -50,10 +50,29 @@ pub enum ChatUpdate {
     /// The turn failed. Not produced by [`emission`] — a failure is `send`'s
     /// return value, not a streamed event — but part of the same union
     /// because it lands in the same message, and a client that had to handle
-    /// it separately would be told about failure twice in two shapes.
+    /// it separately would be told about failure twice in two shapes. A host
+    /// builds it, and [`ChatUpdate::AuthRequired`], with [`turn_failure`].
     Error {
         message: String,
     },
+    /// The turn failed because the agent is logged out. Its own kind rather
+    /// than an `Error` with a recognisable message, because the client offers
+    /// a remedy for this one: the logins the session's `ChatAuth` lists.
+    AuthRequired {
+        message: String,
+    },
+}
+
+/// The update that reports a failed turn, on the turn's own channel.
+pub fn turn_failure(error: &TurnError) -> ChatUpdate {
+    match error {
+        TurnError::AuthRequired { message } => ChatUpdate::AuthRequired {
+            message: message.clone(),
+        },
+        TurnError::Failed(_) => ChatUpdate::Error {
+            message: error.to_string(),
+        },
+    }
 }
 
 /// Where an event goes: into a turn, or onto the session as a whole.
@@ -65,16 +84,9 @@ pub enum ChatUpdate {
 /// is how one of them ends up on the wrong channel.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ChatEmission {
-    Turn {
-        turn_id: String,
-        update: ChatUpdate,
-    },
-    SessionError {
-        message: String,
-    },
-    ConfigOptions {
-        options: Vec<ChatConfigOption>,
-    },
+    Turn { turn_id: String, update: ChatUpdate },
+    SessionError { message: String },
+    ConfigOptions { options: Vec<ChatConfigOption> },
 }
 
 /// The wire form of one event.
@@ -191,6 +203,26 @@ mod tests {
         assert_eq!(json["kind"], "tool");
         assert_eq!(json["status"], "completed");
         assert!(json["title"].is_null());
+    }
+
+    #[test]
+    fn a_logged_out_agent_is_its_own_kind_of_failure() {
+        // The client offers a login for this kind and nothing for `error`, so
+        // the distinction has to survive serialization, not just the enum.
+        let auth = serde_json::to_value(turn_failure(&TurnError::from(
+            agent_client_protocol::Error::auth_required(),
+        )))
+        .unwrap();
+        assert_eq!(
+            auth,
+            json!({ "kind": "auth_required", "message": "Authentication required" })
+        );
+
+        let other = serde_json::to_value(turn_failure(&TurnError::from(
+            agent_client_protocol::Error::internal_error(),
+        )))
+        .unwrap();
+        assert_eq!(other["kind"], "error");
     }
 
     #[test]

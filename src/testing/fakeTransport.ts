@@ -13,9 +13,11 @@ import type { ChatTransport } from "../transport.js";
 import type {
   AgentBackend,
   BackendStatus,
+  ChatAuth,
   ChatConfigOption,
   ChatConversationRecord,
   ChatDone,
+  ChatLoginOutcome,
   ChatMessageRecord,
   ChatSendResult,
   ChatStartResult,
@@ -41,10 +43,22 @@ export interface FakeTurn {
   fail: (message: string) => void;
 }
 
+/** A login waiting on a browser that is not there. `succeed` and `fail` are the
+ *  user finishing it, one way or the other; a cancel resolves it on its own. */
+export interface FakeLogin {
+  sessionId: string;
+  methodId: string;
+  succeed: () => void;
+  fail: (message: string) => void;
+}
+
 export interface FakeTransportOptions {
   backends?: BackendStatus[];
   conversations?: ChatConversationRecord[];
   configOptions?: ChatConfigOption[];
+  /** What every session's agent says about logging in. Defaults to an agent
+   *  that offers nothing. */
+  auth?: ChatAuth;
   /** Rejects `start` with this message instead of opening a session. */
   startFails?: string;
 }
@@ -82,6 +96,10 @@ export interface FakeTransport extends ChatTransport {
   /** Push a config change the agent made on its own. */
   pushConfig(sessionId: string, options: ChatConfigOption[]): void;
   readonly closed: string[];
+  /** Logins that have been started and not yet ended, oldest first. */
+  readonly logins: FakeLogin[];
+  /** Sessions whose agent was logged out, in order. */
+  readonly loggedOut: string[];
   readonly cancelled: Array<{ sessionId: string; turnId: string }>;
   readonly answered: Array<{ requestId: string; optionId: string | null }>;
   readonly forked: Array<{
@@ -99,9 +117,14 @@ export function createFakeTransport(options: FakeTransportOptions = {}): FakeTra
   const backends = options.backends ?? [backendStatus("ClaudeCode")];
   let conversations = options.conversations ?? [];
   const configOptions = options.configOptions ?? [];
+  const auth = options.auth ?? { methods: [], can_log_out: false };
 
   const turns: FakeTurn[] = [];
   const closed: string[] = [];
+  const logins: FakeLogin[] = [];
+  const loggedOut: string[] = [];
+  /** How to end each running login as cancelled, by session. */
+  const cancelLogin = new Map<string, () => void>();
   const cancelled: Array<{ sessionId: string; turnId: string }> = [];
   const answered: Array<{ requestId: string; optionId: string | null }> = [];
   const forked: FakeTransport["forked"] = [];
@@ -184,12 +207,15 @@ export function createFakeTransport(options: FakeTransportOptions = {}): FakeTra
       backend_session_id: `backend-${sessionId}`,
       config_options: configOptions,
       messages: [],
+      auth,
     };
   }
 
   return {
     turns,
     closed,
+    logins,
+    loggedOut,
     cancelled,
     answered,
     forked,
@@ -319,6 +345,43 @@ export function createFakeTransport(options: FakeTransportOptions = {}): FakeTra
 
     answerPermission: async (_sessionId, requestId, optionId) => {
       answered.push({ requestId, optionId });
+    },
+
+    logIn: (sessionId, methodId) =>
+      new Promise<ChatLoginOutcome>((resolve, reject) => {
+        if (!auth.methods.some((method) => method.id === methodId)) {
+          reject(new Error(`the agent offered no login called ${methodId}`));
+          return;
+        }
+        const end = () => {
+          logins.splice(logins.indexOf(login), 1);
+          cancelLogin.delete(sessionId);
+        };
+        const login: FakeLogin = {
+          sessionId,
+          methodId,
+          succeed: () => {
+            end();
+            resolve("logged_in");
+          },
+          fail: (message) => {
+            end();
+            reject(new Error(message));
+          },
+        };
+        logins.push(login);
+        cancelLogin.set(sessionId, () => {
+          end();
+          resolve("cancelled");
+        });
+      }),
+
+    cancelLogIn: async (sessionId) => {
+      cancelLogin.get(sessionId)?.();
+    },
+
+    logOut: async (sessionId) => {
+      loggedOut.push(sessionId);
     },
 
     onSessionError: async (sessionId, handler) => {

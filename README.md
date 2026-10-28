@@ -124,6 +124,37 @@ their own session transcript get a record in the conversation store, because a
 history that can be shown but never continued is a history that lies about
 being one.
 
+### Logging in
+
+Installed is not the same as usable: an agent can complete the handshake, open
+a session and only then refuse the first message because nobody is logged in.
+Claude Code does exactly that, with ACP's `auth_required` error.
+
+So `initialize` advertises that the client can run `terminal` logins, and the
+agent answers with the ones it has — for Claude Code, *Claude Subscription* and
+*Anthropic Console*. They are on `ChatSession::auth()`, and a host hands them
+to the window when the session starts. A refused turn arrives as
+`ChatUpdate::AuthRequired` rather than as an error to read, and the pane puts
+the agent's logins above the composer.
+
+A login is the backend's own launch with the method's arguments after it —
+`npx -y <package>@<pinned version> --cli auth login --claudeai` — run without a
+terminal: the CLI opens the browser, takes the sign-in back on a localhost
+listener and exits. `ChatSession::log_in` waits for that, `cancel_log_in` stops
+it (its whole process group, within three seconds), and closing the session
+stops it too. The adapter also advertises an absolute command for the same
+login, but it names the node binary and npx cache directory of the process
+that answered, and running it would be a second way of launching the adapter.
+
+The session that refused was started logged out, so after a login the store
+reopens the conversation on a fresh one and puts the refused message back in
+the composer. `log_out` goes through ACP's `logout`, where the agent says it
+answers it, and ends the same way.
+
+An agent whose logins are not `terminal` ones — completed by an `authenticate`
+request, or by a secret the client would have to hold — is offered none here;
+the pane falls back to its `auth_note`.
+
 ### Using it
 
 **Rust.** A git dependency, pinned to a tag — a dependency that moves under a
@@ -267,6 +298,8 @@ answering a different question from the one being branched.
 - **Wilkes' MCP server, readers and search** stayed in Wilkes. They are the
   application, and they now reach a session through `ChatHost` like anything
   else would.
+- **Logins that are not `terminal` ones.** `authenticate`-completed and
+  environment-variable methods are not offered; see *Logging in*.
 - **A backend not in `AgentBackend`.** The enum is closed on purpose: each
   variant names an adapter this crate has been checked against at a pinned
   version, and "which adapter" is not meant to be a runtime question.

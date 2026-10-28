@@ -224,6 +224,7 @@ export function applyUpdate(message: ChatMessage, update: ChatUpdate): ChatMessa
         permissions: upsertPermission(message.permissions, update),
       };
     case "error":
+    case "auth_required":
       return { ...message, error: update.message };
   }
 }

@@ -707,6 +707,27 @@
 
 /* ── Composer ───────────────────────────────────────────────────────────── */
 
+.wilkes-chat__login {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid var(--acp-border);
+  background: var(--acp-bg-raised);
+  font-size: var(--acp-font-size-small);
+}
+
+.wilkes-chat__login-lead {
+  color: var(--acp-text);
+  font-weight: 600;
+}
+
+.wilkes-chat__login-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .wilkes-chat__composer {
   display: flex;
   flex-direction: column;

@@ -2,6 +2,7 @@ import type {
   AgentBackend,
   BackendStatus,
   ChatConfigOption,
+  ChatLoginOutcome,
   ChatConversationRecord,
   ChatDone,
   ChatSendResult,
@@ -101,6 +102,17 @@ export interface ChatTransport {
     optionId: string | null,
   ): Promise<void>;
 
+  /** Run one of the logins the session's agent offered, and resolve when the
+   *  user has finished in the browser — or given up, through `cancelLogIn`.
+   *  Rejects when the login itself failed, with what it said. */
+  logIn(sessionId: string, methodId: string): Promise<ChatLoginOutcome>;
+
+  /** Stop the login `logIn` is waiting on. */
+  cancelLogIn(sessionId: string): Promise<void>;
+
+  /** Log the session's agent out, where `ChatAuth.can_log_out` says it can. */
+  logOut(sessionId: string): Promise<void>;
+
   /** The subprocess died outside any turn's request/response cycle. Registered
    *  once per session; resolves to an unsubscribe. */
   onSessionError(
@@ -135,6 +147,9 @@ export const CHAT_COMMANDS = [
   "chat_send",
   "chat_cancel",
   "chat_answer_permission",
+  "chat_log_in",
+  "chat_cancel_log_in",
+  "chat_log_out",
 ] as const;
 
 export type ChatCommand = (typeof CHAT_COMMANDS)[number];

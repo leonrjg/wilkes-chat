@@ -24,6 +24,25 @@ export interface BackendStatus {
   unavailable_reason: string | null;
 }
 
+/** One login the agent offered, by `id`. What it runs stays in the shell: the
+ *  client names a method and the session looks it up among its own. */
+export interface ChatAuthMethod {
+  id: string;
+  name: string;
+  description: string | null;
+}
+
+/** What the agent said about logging in when the session started. */
+export interface ChatAuth {
+  /** The logins the shell can run for it. Empty for an agent that offers
+   *  none, which leaves the user to log in the way that agent says. */
+  methods: ChatAuthMethod[];
+  can_log_out: boolean;
+}
+
+/** How a login ended, when it did not fail. */
+export type ChatLoginOutcome = "logged_in" | "cancelled";
+
 export interface ChatConfigChoice {
   value: string;
   name: string;
@@ -148,7 +167,10 @@ export type ChatUpdate =
       title: string | null;
       options: ChatPermissionOption[];
     }
-  | { kind: "error"; message: string };
+  | { kind: "error"; message: string }
+  /** The turn failed because the agent is logged out — the failure the pane
+   *  offers a remedy for, from `ChatStartResult.auth`. */
+  | { kind: "auth_required"; message: string };
 
 /** What starting or reopening a session yields. */
 export interface ChatStartResult {
@@ -159,6 +181,7 @@ export interface ChatStartResult {
   backend_session_id: string | null;
   config_options: ChatConfigOption[];
   messages: ChatMessageRecord[];
+  auth: ChatAuth;
 }
 
 export interface ChatSendResult {

@@ -15,7 +15,7 @@ export { MessageBubble } from "./MessageBubble.js";
 export type { MessageBubbleProps } from "./MessageBubble.js";
 
 export { createChatStore } from "./createChatStore.js";
-export type { ChatState, ChatStore, ChatStoreOptions } from "./createChatStore.js";
+export type { ChatLogin, ChatState, ChatStore, ChatStoreOptions } from "./createChatStore.js";
 
 export { CHAT_COMMANDS, chatChannel } from "./transport.js";
 export type { ChatCommand, ChatTransport } from "./transport.js";
@@ -45,6 +45,8 @@ export type {
 export type {
   AgentBackend,
   BackendStatus,
+  ChatAuth,
+  ChatAuthMethod,
   ChatBackendConfig,
   ChatConfigChoice,
   ChatConfigOption,
@@ -52,6 +54,7 @@ export type {
   ChatContentBlockRecord,
   ChatConversationRecord,
   ChatDone,
+  ChatLoginOutcome,
   ChatMessageRecord,
   ChatPermissionOption,
   ChatSendResult,

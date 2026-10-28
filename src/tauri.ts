@@ -17,6 +17,7 @@ import type {
   ChatConfigOption,
   ChatConversationRecord,
   ChatDone,
+  ChatLoginOutcome,
   ChatSendResult,
   ChatStartResult,
   ChatUpdate,
@@ -124,6 +125,13 @@ export function tauriChatTransport(): ChatTransport {
       optionId: string | null,
     ) =>
       invoke<void>("chat_answer_permission", { sessionId, requestId, optionId }),
+
+    logIn: (sessionId: string, methodId: string) =>
+      invoke<ChatLoginOutcome>("chat_log_in", { sessionId, methodId }),
+
+    cancelLogIn: (sessionId: string) => invoke<void>("chat_cancel_log_in", { sessionId }),
+
+    logOut: (sessionId: string) => invoke<void>("chat_log_out", { sessionId }),
 
     onSessionError: (sessionId: string, handler: (message: string) => void) =>
       listen<{ message: string }>(chatChannel.sessionError(sessionId), (event) =>

@@ -7,13 +7,16 @@ description = "An ACP (Agent Client Protocol) chat client: backend discovery, se
 repository = "https://github.com/leonrjg/wilkes-chat"
 
 [dependencies]
-agent-client-protocol = "1.0.1"
+# `unstable_auth_methods` is what lets an agent offer a login the client runs
+# (`terminal` auth methods); see `auth`.
+agent-client-protocol = { version = "1.0.1", features = ["unstable_auth_methods"] }
 anyhow = "1"
 async-trait = "0.1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+libc = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["rt", "process", "io-util", "sync", "macros", "net"] }
+tokio = { version = "1", features = ["rt", "process", "io-util", "sync", "macros", "net", "time"] }
 tracing = "0.1"
 uuid = { version = "1", features = ["v4"] }
 which = "6"

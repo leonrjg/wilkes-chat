@@ -1,7 +1,9 @@
 //! An ACP chat client, with the application it serves kept behind one trait.
 //!
-//! Five things, and an application supplies none of them:
+//! Six things, and an application supplies none of them:
 //!
+//! - **[`auth`]** — logging the agent in when it says it is not, with the
+//!   login it offered, from inside the application.
 //! - **[`backend`]** — which CLI answers, whether its adapter is on this
 //!   machine, and how to launch it.
 //! - **[`session`]** — one subprocess speaking ACP: the handshake, a streamed
@@ -38,6 +40,7 @@
 //! The transport is stdio to a subprocess, which is the only thing an
 //! application cannot substitute; everything else it can.
 
+pub mod auth;
 pub mod backend;
 pub mod host;
 pub mod session;
@@ -45,6 +48,7 @@ pub mod store;
 pub mod transcript;
 pub mod wire;
 
+pub use auth::{ChatAuth, ChatAuthMethod, LoginOutcome};
 pub use backend::{
     backend_status, install_backend, is_resumable, label, list_backends, AgentBackend,
     BackendStatus,
@@ -52,8 +56,8 @@ pub use backend::{
 pub use host::{ChatHost, NoHost};
 pub use session::{
     config_for_backend, spawn, upsert_backend_config, ChatBackendConfig, ChatConfigOption,
-    ChatConfigValue, ChatEvent, ChatSession, SpawnOptions, SpawnedChatSession,
+    ChatConfigValue, ChatEvent, ChatSession, SpawnOptions, SpawnedChatSession, TurnError,
 };
 pub use store::{ChatConversationRecord, ChatMessageRecord, ChatTurnEnvironment};
 pub use transcript::apply_chat_event;
-pub use wire::{emission, ChatEmission, ChatUpdate};
+pub use wire::{emission, turn_failure, ChatEmission, ChatUpdate};

@@ -111,10 +111,16 @@ pub fn label(backend: AgentBackend) -> &'static str {
     }
 }
 
-/// Shown next to a disabled backend in the agent selector.
+/// Shown next to a disabled backend in the agent selector, and beside a
+/// login notice when the agent offered no login the client can run.
+///
+/// Claude Code's says nothing about logging in: its adapter offers logins
+/// the client runs (see [`crate::auth`]), so the pane is where that happens,
+/// and a note sending the user to a terminal would be a second answer to the
+/// same question.
 pub fn auth_note(backend: AgentBackend) -> &'static str {
     match backend {
-        AgentBackend::ClaudeCode => "Install the Claude Code ACP, then run `claude` once to log in",
+        AgentBackend::ClaudeCode => "Install the Claude Code ACP",
         AgentBackend::Codex => "Install the Codex ACP, then run `codex` once to log in",
         AgentBackend::Nanocoder => "Install the Nanocoder ACP and configure a provider",
     }

@@ -513,6 +513,140 @@ describe("branching a conversation", () => {
   });
 });
 
+const CLAUDE_AUTH = {
+  methods: [
+    { id: "claude-ai-login", name: "Claude Subscription", description: "Use Claude subscription" },
+    { id: "console-login", name: "Anthropic Console", description: null },
+  ],
+  can_log_out: true,
+};
+
+describe("an agent that is not logged in", () => {
+  const question = "What does chapter two argue?";
+
+  /** Ask something and have the agent refuse it for want of a login, the way
+   *  Claude Code does: the turn reports `auth_required` and ends. */
+  async function refused() {
+    build({ auth: CLAUDE_AUTH });
+    await store.getState().initialize();
+    const sending = store.getState().sendMessage(question);
+    const turn = transport.lastTurn();
+    turn.emit({ kind: "auth_required", message: "Authentication required" });
+    turn.finish();
+    await sending;
+  }
+
+  it("offers the agent's own logins for the turn it refused", async () => {
+    await refused();
+
+    expect(store.getState().login).toEqual({
+      running: false,
+      message: "Authentication required",
+      prompt: question,
+    });
+    expect(store.getState().auth.methods.map((m) => m.id)).toEqual([
+      "claude-ai-login",
+      "console-login",
+    ]);
+    // The answer still says why it is empty.
+    expect(store.getState().messages.at(-1)?.error).toBe("Authentication required");
+  });
+
+  it("logs in, reopens the conversation on a fresh session and hands the question back", async () => {
+    await refused();
+    const { sessionId, conversationId } = store.getState();
+
+    const loggingIn = store.getState().logIn("claude-ai-login");
+    expect(store.getState().login?.running).toBe(true);
+    expect(transport.logins.map((l) => l.methodId)).toEqual(["claude-ai-login"]);
+    transport.logins[0].succeed();
+    await loggingIn;
+
+    // The session that refused was started logged out; a fresh one is not.
+    expect(transport.closed).toContain(sessionId);
+    expect(store.getState().sessionId).not.toBe(sessionId);
+    expect(store.getState().conversationId).toBe(conversationId);
+    expect(store.getState().login).toBeNull();
+    expect(store.getState().takeDraftToRestore()).toBe(question);
+    expect(store.getState().takeDraftToRestore()).toBeNull();
+  });
+
+  it("goes back to offering logins when one is cancelled", async () => {
+    await refused();
+    const { sessionId } = store.getState();
+
+    const loggingIn = store.getState().logIn("console-login");
+    await store.getState().cancelLogIn();
+    await loggingIn;
+
+    expect(store.getState().login).toEqual({
+      running: false,
+      message: "Authentication required",
+      prompt: question,
+    });
+    expect(store.getState().sessionId).toBe(sessionId);
+    expect(store.getState().draftToRestore).toBeNull();
+  });
+
+  it("says why a login failed and offers it again", async () => {
+    await refused();
+
+    const loggingIn = store.getState().logIn("claude-ai-login");
+    transport.logins[0].fail("Claude Code login failed: OAuth error: access_denied");
+    await loggingIn;
+
+    expect(store.getState().login).toMatchObject({
+      running: false,
+      message: "Claude Code login failed: OAuth error: access_denied",
+      prompt: question,
+    });
+  });
+
+  it("sends nothing while a login is open in the browser", async () => {
+    await refused();
+    void store.getState().logIn("claude-ai-login");
+
+    await store.getState().sendMessage("Anything?");
+
+    expect(transport.turns).toHaveLength(0);
+  });
+
+  it("stops showing the notice once the user asks again", async () => {
+    await refused();
+
+    void store.getState().sendMessage(question);
+
+    expect(store.getState().login).toBeNull();
+  });
+});
+
+describe("signing out", () => {
+  it("logs the agent out and reopens on a session that knows it", async () => {
+    build({ auth: CLAUDE_AUTH });
+    await store.getState().initialize();
+    const { sessionId } = store.getState();
+
+    await store.getState().logOut();
+
+    expect(transport.loggedOut).toEqual([sessionId]);
+    expect(transport.closed).toContain(sessionId);
+    expect(store.getState().sessionId).not.toBe(sessionId);
+    expect(store.getState().login).toEqual({
+      running: false,
+      message: "Signed out.",
+      prompt: null,
+    });
+  });
+
+  it("is not offered by an agent that cannot do it", async () => {
+    await store.getState().initialize();
+
+    await store.getState().logOut();
+
+    expect(transport.loggedOut).toEqual([]);
+  });
+});
+
 describe("resetting", () => {
   it("closes the session and empties the thread", async () => {
     await store.getState().switchBackend("ClaudeCode");

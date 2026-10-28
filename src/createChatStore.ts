@@ -20,8 +20,10 @@ import {
 import type {
   AgentBackend,
   BackendStatus,
+  ChatAuth,
   ChatConfigOption,
   ChatConversationRecord,
+  ChatLoginOutcome,
   ChatStartResult,
 } from "./types.js";
 
@@ -72,6 +74,17 @@ export interface ChatStoreOptions {
   onBackgroundError?: (context: string, error: unknown) => void;
 }
 
+/** The agent is waiting on a login: after a turn it refused for want of one,
+ *  or after a sign-out. */
+export interface ChatLogin {
+  /** A login is open in the browser right now. */
+  running: boolean;
+  /** Why it is needed, or why the last attempt failed. */
+  message: string;
+  /** The message the agent refused, to hand back once it is logged in. */
+  prompt: string | null;
+}
+
 export interface ChatState {
   // Backends
   backends: BackendStatus[];
@@ -90,6 +103,12 @@ export interface ChatState {
   starting: boolean;
   sessionError: string | null;
   configOptions: ChatConfigOption[];
+  /** What the agent said about logging in when this session started. */
+  auth: ChatAuth;
+  login: ChatLogin | null;
+  /** Text for the composer, once: the message a login was needed for, put
+   *  back after the session restarts so it can be sent again. */
+  draftToRestore: string | null;
 
   // History
   conversations: ChatConversationRecord[];
@@ -137,6 +156,16 @@ export interface ChatState {
     option: ChatPermissionPrompt["options"][number] | null,
   ) => Promise<void>;
   cancel: () => Promise<void>;
+  /** Run one of the logins in `auth`, then reopen the conversation on a fresh
+   *  session — the one that refused was started logged out, and an agent may
+   *  keep what it started with. */
+  logIn: (methodId: string) => Promise<void>;
+  cancelLogIn: () => Promise<void>;
+  /** Log the agent out, then reopen the conversation on a fresh session so
+   *  the pane and the agent agree that nobody is logged in. */
+  logOut: () => Promise<void>;
+  /** Read `draftToRestore` and clear it, so it is put back exactly once. */
+  takeDraftToRestore: () => string | null;
   /** Close the session and forget the thread. An application calls this when
    *  the chat's whole context goes away — a workspace switch, a sign-out. */
   reset: () => void;
@@ -179,6 +208,8 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+const NO_AUTH: ChatAuth = { methods: [], can_log_out: false };
+
 const CLEARED_SESSION = {
   sessionId: null,
   conversationId: null,
@@ -188,6 +219,8 @@ const CLEARED_SESSION = {
   currentTurnId: null,
   sessionError: null,
   configOptions: [] as ChatConfigOption[],
+  auth: NO_AUTH,
+  login: null,
 };
 
 export function createChatStore(options: ChatStoreOptions): ChatStore {
@@ -262,10 +295,19 @@ export function createChatStore(options: ChatStoreOptions): ChatStore {
         currentTurnId: null,
         sessionError: null,
         configOptions: started.config_options,
+        auth: started.auth,
+        login: null,
       });
       subscribe(started.session_id).catch((error) =>
         report("subscribing to the session failed", error),
       );
+    }
+
+    /** A fresh session in place of the open one, on its conversation when it
+     *  has one. Failures are already on `sessionError` when this rejects. */
+    async function reopen(backend: AgentBackend, conversationId: string | null) {
+      if (conversationId) await get().openConversation(conversationId);
+      else await get().switchBackend(backend, { remember: false });
     }
 
     return {
@@ -277,6 +319,7 @@ export function createChatStore(options: ChatStoreOptions): ChatStore {
       ...CLEARED_SESSION,
       backend: null,
       starting: false,
+      draftToRestore: null,
       conversations: [],
       conversationsLoading: false,
 
@@ -505,8 +548,8 @@ export function createChatStore(options: ChatStoreOptions): ChatStore {
       },
 
       sendMessage: async (text) => {
-        const { sessionId, streaming, conversationId } = get();
-        if (!sessionId || streaming) return;
+        const { sessionId, streaming, conversationId, login } = get();
+        if (!sessionId || streaming || login?.running) return;
 
         // Two ids from the one generator: the turn, which the event channels
         // are keyed by, and the user's message, which the host records the
@@ -520,6 +563,9 @@ export function createChatStore(options: ChatStoreOptions): ChatStore {
           messages: [...s.messages, sent, answer],
           streaming: true,
           currentTurnId: turnId,
+          // Sending again is the user's own answer to a login notice — they
+          // may have logged in some other way — so it stops being shown.
+          login: null,
         }));
 
         const patchAnswer = (patch: (m: ChatMessage) => ChatMessage) =>
@@ -546,7 +592,12 @@ export function createChatStore(options: ChatStoreOptions): ChatStore {
             sent.id,
             text,
             hostPayload?.(),
-            (update) => patchAnswer((m) => applyUpdate(m, update)),
+            (update) => {
+              if (update.kind === "auth_required" && get().sessionId === sessionId) {
+                set({ login: { running: false, message: update.message, prompt: text } });
+              }
+              patchAnswer((m) => applyUpdate(m, update));
+            },
             () => finish((m) => m),
           );
           if (get().sessionId !== sessionId) return;
@@ -602,12 +653,73 @@ export function createChatStore(options: ChatStoreOptions): ChatStore {
           .catch((error) => report("cancelling the turn failed", error));
       },
 
+      logIn: async (methodId) => {
+        const { sessionId, backend, conversationId, login } = get();
+        if (!sessionId || !backend || !login || login.running) return;
+        set({ login: { ...login, running: true } });
+
+        let outcome: ChatLoginOutcome;
+        try {
+          outcome = await transport.logIn(sessionId, methodId);
+        } catch (error) {
+          if (get().sessionId === sessionId) {
+            set({ login: { ...login, running: false, message: errorMessage(error) } });
+          }
+          return;
+        }
+        if (get().sessionId !== sessionId) return;
+        if (outcome === "cancelled") {
+          set({ login: { ...login, running: false } });
+          return;
+        }
+
+        // Before the reopen, which clears the session but not this.
+        set({ draftToRestore: login.prompt });
+        await reopen(backend, conversationId).catch(() => {
+          /* surfaced as `sessionError` by the reopen */
+        });
+      },
+
+      cancelLogIn: async () => {
+        const { sessionId, login } = get();
+        if (!sessionId || !login?.running) return;
+        await transport
+          .cancelLogIn(sessionId)
+          .catch((error) => report("cancelling the login failed", error));
+      },
+
+      logOut: async () => {
+        const { sessionId, backend, conversationId, auth, streaming } = get();
+        if (!sessionId || !backend || !auth.can_log_out || streaming) return;
+        try {
+          await transport.logOut(sessionId);
+        } catch (error) {
+          if (get().sessionId === sessionId) set({ sessionError: errorMessage(error) });
+          return;
+        }
+        try {
+          await reopen(backend, conversationId);
+        } catch {
+          return; // surfaced as `sessionError` by the reopen
+        }
+        // Said now rather than on the next refused turn, so signing out is
+        // seen to have done something and the way back in is right there.
+        set({ login: { running: false, message: "Signed out.", prompt: null } });
+      },
+
+      takeDraftToRestore: () => {
+        const draft = get().draftToRestore;
+        if (draft !== null) set({ draftToRestore: null });
+        return draft;
+      },
+
       reset: () => {
         closeOpenSession();
         set({
           ...CLEARED_SESSION,
           backend: null,
           starting: false,
+          draftToRestore: null,
           conversations: [],
           conversationsLoading: false,
         });

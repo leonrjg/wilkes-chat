@@ -12,13 +12,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use agent_client_protocol::schema::v1::{
-    CancelNotification, ClientCapabilities, ContentBlock, FileSystemCapabilities,
-    InitializeRequest, LoadSessionRequest, NewSessionRequest, PermissionOption, PermissionOptionId,
-    PermissionOptionKind, PromptRequest, ReadTextFileRequest, ReadTextFileResponse,
-    RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse,
-    SelectedPermissionOutcome, SessionConfigKind, SessionConfigOption, SessionConfigOptionCategory,
-    SessionConfigSelectOptions, SessionId, SetSessionConfigOptionRequest, StopReason, TextContent,
-    ToolCallStatus, ToolCallUpdate, WriteTextFileRequest, WriteTextFileResponse,
+    AuthCapabilities, CancelNotification, ClientCapabilities, ContentBlock, ErrorCode,
+    FileSystemCapabilities, InitializeRequest, LoadSessionRequest, LogoutRequest,
+    NewSessionRequest, PermissionOption, PermissionOptionId, PermissionOptionKind, PromptRequest,
+    ReadTextFileRequest, ReadTextFileResponse, RequestPermissionOutcome, RequestPermissionRequest,
+    RequestPermissionResponse, SelectedPermissionOutcome, SessionConfigKind, SessionConfigOption,
+    SessionConfigOptionCategory, SessionConfigSelectOptions, SessionId,
+    SetSessionConfigOptionRequest, StopReason, TextContent, ToolCallStatus, ToolCallUpdate,
+    WriteTextFileRequest, WriteTextFileResponse,
 };
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::{AcpAgent, Agent, Client, ConnectionTo, Responder};
@@ -26,6 +27,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, oneshot};
 use tracing::{error, info, warn};
 
+use crate::auth::{run_login, ChatAuth, LoginOutcome};
 use crate::backend::{auth_note, label, resolve_launch_spec, AgentBackend};
 use crate::host::{ChatHost, NoHost};
 
@@ -252,7 +254,9 @@ pub struct SpawnedChatSession {
 pub enum SessionOpenMode {
     New,
     /// Resume the agent's own session by the id it minted.
-    Load { backend_session_id: String },
+    Load {
+        backend_session_id: String,
+    },
 }
 
 /// Everything a session needs to open.
@@ -295,20 +299,62 @@ impl SpawnOptions {
 struct SessionReady {
     backend_session_id: String,
     replay_messages: Vec<ChatReplayMessage>,
+    auth: ChatAuth,
 }
 
 enum SessionCommand {
     Prompt {
         turn_id: String,
         blocks: Vec<ContentBlock>,
-        reply: oneshot::Sender<Result<String, String>>,
+        reply: oneshot::Sender<Result<String, agent_client_protocol::Error>>,
     },
     SetConfigOption {
         config_id: String,
         value: String,
         reply: oneshot::Sender<Result<Vec<ChatConfigOption>, String>>,
     },
+    Logout {
+        reply: oneshot::Sender<Result<(), String>>,
+    },
     Close,
+}
+
+/// Why a turn produced no answer.
+///
+/// Typed rather than a message because one failure has a remedy the window can
+/// offer: an agent that is logged out says so with ACP's `auth_required`, and
+/// [`ChatSession::auth`] says how to log it in from here. Every other failure
+/// is something to read.
+#[derive(Debug)]
+pub enum TurnError {
+    /// The agent will not answer until the user logs in.
+    AuthRequired {
+        message: String,
+    },
+    Failed(anyhow::Error),
+}
+
+impl std::fmt::Display for TurnError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TurnError::AuthRequired { message } => f.write_str(message),
+            TurnError::Failed(error) => write!(f, "{error:#}"),
+        }
+    }
+}
+
+impl std::error::Error for TurnError {}
+
+impl From<agent_client_protocol::Error> for TurnError {
+    fn from(error: agent_client_protocol::Error) -> Self {
+        if error.code == ErrorCode::AuthRequired {
+            TurnError::AuthRequired {
+                message: error.message,
+            }
+        } else {
+            TurnError::Failed(anyhow::anyhow!(error.message))
+        }
+    }
 }
 
 /// The user's standing instructions, and what the agent has already been told
@@ -365,6 +411,11 @@ pub struct ChatSession {
     /// The user's standing instructions, and what the agent has already been
     /// told of them. See [`ChatSession::set_instructions`].
     instructions: Mutex<Instructions>,
+    /// What the agent said about logging in, as of `initialize`.
+    auth: ChatAuth,
+    /// Stops the login in progress, if there is one — when fired, and when
+    /// dropped, which is what closing the session does to it.
+    login_cancel: Mutex<Option<oneshot::Sender<()>>>,
     /// Held so anything the host hung off itself (an MCP server, a cache)
     /// outlives every turn and dies with the session.
     _host: Arc<dyn ChatHost>,
@@ -384,7 +435,7 @@ impl ChatSession {
     /// through the `ChatEvent` receiver returned by [`spawn`].
     ///
     /// Returns the stop reason (`end_turn`, `cancelled`, `max_tokens`, ...).
-    pub async fn send(&self, turn_id: String, text: String) -> anyhow::Result<String> {
+    pub async fn send(&self, turn_id: String, text: String) -> Result<String, TurnError> {
         let first_turn = !self.first_turn_sent.swap(true, Ordering::SeqCst);
         let mut blocks = Vec::with_capacity(4);
 
@@ -420,12 +471,14 @@ impl ChatSession {
                 blocks,
                 reply: reply_tx,
             })
-            .map_err(|_| anyhow::anyhow!("chat session is closed"))?;
+            .map_err(|_| TurnError::Failed(anyhow::anyhow!("chat session is closed")))?;
 
         reply_rx
             .await
-            .map_err(|_| anyhow::anyhow!("chat session ended before responding"))?
-            .map_err(|message| anyhow::anyhow!(message))
+            .map_err(|_| {
+                TurnError::Failed(anyhow::anyhow!("chat session ended before responding"))
+            })?
+            .map_err(TurnError::from)
     }
 
     /// Text to send once, ahead of the next turn, and then forget.
@@ -557,9 +610,77 @@ impl ChatSession {
         options
     }
 
-    /// Ends the subprocess. Callers close in-flight turns via `cancel()` before
-    /// `close()` when they need graceful turn cancellation.
+    /// What the agent said about logging in: the logins this client can run
+    /// for it, and whether it answers `logout`.
+    pub fn auth(&self) -> &ChatAuth {
+        &self.auth
+    }
+
+    /// Log the agent in with one of the methods it advertised, and wait for
+    /// the user to finish in the browser.
+    ///
+    /// This session's subprocess is not told: it was started logged out and
+    /// an agent may hold on to that, so a host follows a successful login by
+    /// opening a fresh session. One login at a time; [`ChatSession::cancel_log_in`]
+    /// and [`ChatSession::close`] both stop it.
+    pub async fn log_in(&self, method_id: &str) -> anyhow::Result<LoginOutcome> {
+        let method = self.auth.method(method_id).cloned().ok_or_else(|| {
+            anyhow::anyhow!(
+                "{} offered no login called {method_id}",
+                label(self.backend)
+            )
+        })?;
+        let (cancel_tx, cancel_rx) = oneshot::channel();
+        {
+            let mut slot = self.login_cancel.lock().unwrap();
+            if slot.is_some() {
+                anyhow::bail!("a login is already running");
+            }
+            *slot = Some(cancel_tx);
+        }
+        let outcome = run_login(self.backend, &method, cancel_rx).await;
+        self.login_cancel.lock().unwrap().take();
+        outcome
+    }
+
+    /// Stop the login in progress. Nothing to stop is not an error: the login
+    /// may have finished while the click was on its way.
+    pub fn cancel_log_in(&self) {
+        match self.login_cancel.lock().unwrap().take() {
+            Some(cancel) => {
+                let _ = cancel.send(());
+            }
+            None => info!("chat: cancel for a login that is no longer running"),
+        }
+    }
+
+    /// Log the agent out, through ACP's `logout`. Like a login, this
+    /// session's subprocess may still hold what it was started with, so a host
+    /// follows this by opening a fresh session.
+    pub async fn log_out(&self) -> anyhow::Result<()> {
+        if !self.auth.can_log_out {
+            anyhow::bail!(
+                "{} does not support logging out from here",
+                label(self.backend)
+            );
+        }
+        let (reply_tx, reply_rx) = oneshot::channel();
+        self.cmd_tx
+            .send(SessionCommand::Logout { reply: reply_tx })
+            .map_err(|_| anyhow::anyhow!("chat session is closed"))?;
+        reply_rx
+            .await
+            .map_err(|_| anyhow::anyhow!("chat session ended before responding"))?
+            .map_err(|message| anyhow::anyhow!(message))
+    }
+
+    /// Ends the subprocess, and any login it was running. Callers close
+    /// in-flight turns via `cancel()` before `close()` when they need graceful
+    /// turn cancellation.
     pub fn close(&self) {
+        // Dropped rather than fired: either stops the login, and this is the
+        // one place that does not need to say which.
+        self.login_cancel.lock().unwrap().take();
         let _ = self.cmd_tx.send(SessionCommand::Close);
     }
 }
@@ -750,20 +871,27 @@ pub async fn spawn(options: SpawnOptions) -> anyhow::Result<SpawnedChatSession> 
                 agent_client_protocol::on_receive_request!(),
             )
             .connect_with(agent, move |cx: ConnectionTo<Agent>| async move {
-                if let Err(e) = cx
+                let initialized = match cx
                     .send_request(InitializeRequest::new(ProtocolVersion::V1).client_capabilities(
-                        ClientCapabilities::new().fs(
-                            FileSystemCapabilities::new()
+                        ClientCapabilities::new()
+                            .fs(FileSystemCapabilities::new()
                                 .read_text_file(offers_read)
-                                .write_text_file(false),
-                        ),
+                                .write_text_file(false))
+                            // A login the agent hands us to run is one the
+                            // window can offer, so the user never has to find
+                            // a terminal to fix "not logged in".
+                            .auth(AuthCapabilities::new().terminal(true)),
                     ))
                     .block_task()
                     .await
                 {
-                    let _ = ready_tx.send(Err(anyhow::anyhow!("initialize failed: {e}")));
-                    return Err(e);
-                }
+                    Ok(response) => response,
+                    Err(e) => {
+                        let _ = ready_tx.send(Err(anyhow::anyhow!("initialize failed: {e}")));
+                        return Err(e);
+                    }
+                };
+                let auth = ChatAuth::from_initialize(&initialized);
 
                 let session_id: SessionId = match open_mode {
                     SessionOpenMode::New => {
@@ -811,6 +939,7 @@ pub async fn spawn(options: SpawnOptions) -> anyhow::Result<SpawnedChatSession> 
                 let _ = ready_tx.send(Ok(SessionReady {
                     backend_session_id: session_id.0.to_string(),
                     replay_messages: replay_messages.lock().unwrap().clone(),
+                    auth,
                 }));
 
                 let cancel_session_id = session_id.clone();
@@ -842,10 +971,8 @@ pub async fn spawn(options: SpawnOptions) -> anyhow::Result<SpawnedChatSession> 
                             // parked (agent abandoned it) would hang its handler
                             // holding the ACP responder -- resolve them as cancel.
                             drain_pending_permissions(&pending_for_loop);
-                            let outcome = match result {
-                                Ok(response) => Ok(stop_reason_str(response.stop_reason).to_string()),
-                                Err(e) => Err(e.message),
-                            };
+                            let outcome =
+                                result.map(|response| stop_reason_str(response.stop_reason).to_string());
                             let _ = reply.send(outcome);
                         }
                         SessionCommand::SetConfigOption {
@@ -874,6 +1001,10 @@ pub async fn spawn(options: SpawnOptions) -> anyhow::Result<SpawnedChatSession> 
                                 Err(e) => Err(e.message),
                             };
                             let _ = reply.send(outcome);
+                        }
+                        SessionCommand::Logout { reply } => {
+                            let result = cx.send_request(LogoutRequest::new()).block_task().await;
+                            let _ = reply.send(result.map(|_| ()).map_err(|e| e.message));
                         }
                         SessionCommand::Close => {
                             drain_pending_permissions(&pending_for_loop);
@@ -919,6 +1050,8 @@ pub async fn spawn(options: SpawnOptions) -> anyhow::Result<SpawnedChatSession> 
             first_turn_sent,
             prelude: Mutex::new(None),
             instructions: Mutex::new(Instructions::default()),
+            auth: ready.auth,
+            login_cancel: Mutex::new(None),
             _host: host,
         },
         events: events_rx,
@@ -1051,7 +1184,11 @@ fn forward_notification(
 
     let Some(turn_id) = current_turn.lock().unwrap().clone() else {
         if *replaying_history.lock().unwrap() {
-            append_replay_update(&mut replay_messages.lock().unwrap(), notification.update, host);
+            append_replay_update(
+                &mut replay_messages.lock().unwrap(),
+                notification.update,
+                host,
+            );
         }
         return;
     };
@@ -1722,11 +1859,16 @@ mod tests {
             value: v.to_string(),
         };
 
-        let stored = upsert_backend_config(Vec::new(), AgentBackend::Codex, vec![value("model", "gpt")]);
+        let stored =
+            upsert_backend_config(Vec::new(), AgentBackend::Codex, vec![value("model", "gpt")]);
         assert_eq!(stored.len(), 1);
 
         let stored = upsert_backend_config(stored, AgentBackend::Codex, vec![value("model", "o3")]);
-        assert_eq!(stored.len(), 1, "the same backend replaced rather than appended");
+        assert_eq!(
+            stored.len(),
+            1,
+            "the same backend replaced rather than appended"
+        );
         assert_eq!(stored[0].values[0].value, "o3");
 
         let stored = upsert_backend_config(

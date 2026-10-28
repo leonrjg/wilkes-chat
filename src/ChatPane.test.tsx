@@ -221,6 +221,97 @@ const SAVED_THREAD = {
   ],
 };
 
+const CLAUDE_AUTH = {
+  methods: [
+    { id: "claude-ai-login", name: "Claude Subscription", description: "Use Claude subscription " },
+    { id: "console-login", name: "Anthropic Console", description: null },
+  ],
+  can_log_out: true,
+};
+
+describe("an agent that is not logged in", () => {
+  /** Type a question and have the agent refuse it for want of a login. */
+  async function refuse(question: string) {
+    await userEvent.type(screen.getByRole("textbox", { name: "Message" }), question);
+    await userEvent.click(screen.getByRole("button", { name: /send/i }));
+    const turn = transport.lastTurn();
+    act(() => {
+      turn.emit({ kind: "auth_required", message: "Authentication required" });
+      turn.finish();
+    });
+  }
+
+  it("offers the agent's logins right above the composer", async () => {
+    build({ backends: [backendStatus("ClaudeCode")], auth: CLAUDE_AUTH });
+    await mount();
+    await refuse("Summarise this");
+
+    const notice = await screen.findByRole("alert");
+    expect(within(notice).getByText("Claude Code isn't logged in.")).toBeInTheDocument();
+    expect(within(notice).getByRole("button", { name: "Claude Subscription" })).toBeInTheDocument();
+    expect(within(notice).getByRole("button", { name: "Anthropic Console" })).toBeInTheDocument();
+  });
+
+  it("waits on the browser, then puts the refused question back in the composer", async () => {
+    build({ backends: [backendStatus("ClaudeCode")], auth: CLAUDE_AUTH });
+    await mount();
+    await refuse("Summarise this");
+
+    await userEvent.click(await screen.findByRole("button", { name: "Claude Subscription" }));
+    expect(screen.getByText("Finish signing in in your browser…")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /send/i })).toBeDisabled();
+
+    act(() => transport.logins[0].succeed());
+
+    await waitFor(() =>
+      expect(screen.getByRole("textbox", { name: "Message" })).toHaveValue("Summarise this"),
+    );
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("lets a login in the browser be abandoned", async () => {
+    build({ backends: [backendStatus("ClaudeCode")], auth: CLAUDE_AUTH });
+    await mount();
+    await refuse("Summarise this");
+
+    await userEvent.click(await screen.findByRole("button", { name: "Anthropic Console" }));
+    await userEvent.click(screen.getByRole("button", { name: /cancel/i }));
+
+    expect(await screen.findByRole("button", { name: "Anthropic Console" })).toBeInTheDocument();
+    expect(transport.logins).toHaveLength(0);
+  });
+
+  it("says how to log in when the agent offers nothing to run here", async () => {
+    build({
+      backends: [backendStatus("Codex", { auth_note: "Install the Codex ACP, then run `codex` once to log in" })],
+    });
+    await mount();
+    await refuse("Summarise this");
+
+    const notice = await screen.findByRole("alert");
+    expect(within(notice).getByText(/run `codex` once to log in/)).toBeInTheDocument();
+    expect(within(notice).queryByRole("button")).not.toBeInTheDocument();
+  });
+});
+
+describe("signing out", () => {
+  it("is offered only by an agent that can do it", async () => {
+    await mount();
+    expect(screen.queryByRole("button", { name: /sign out/i })).not.toBeInTheDocument();
+  });
+
+  it("signs out and offers the way back in", async () => {
+    build({ backends: [backendStatus("ClaudeCode")], auth: CLAUDE_AUTH });
+    await mount();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Sign out of Claude Code" }));
+
+    expect(await screen.findByText("Signed out.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Claude Subscription" })).toBeInTheDocument();
+    expect(transport.loggedOut).toHaveLength(1);
+  });
+});
+
 describe("branching", () => {
   async function openSaved() {
     build({ conversations: [SAVED_THREAD] });

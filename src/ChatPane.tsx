@@ -7,6 +7,7 @@ import {
   CloseIcon,
   CopyIcon,
   DownloadIcon,
+  LogOutIcon,
   PlusIcon,
   RefreshIcon,
   SendIcon,
@@ -93,6 +94,9 @@ export function ChatPane({
   const sessionError = useChatStore((s) => s.sessionError);
   const configOptions = useChatStore((s) => s.configOptions);
   const backendSessionId = useChatStore((s) => s.backendSessionId);
+  const auth = useChatStore((s) => s.auth);
+  const login = useChatStore((s) => s.login);
+  const draftToRestore = useChatStore((s) => s.draftToRestore);
 
   const initialize = useChatStore((s) => s.initialize);
   const loadBackends = useChatStore((s) => s.loadBackends);
@@ -107,6 +111,10 @@ export function ChatPane({
   const forkFromMessage = useChatStore((s) => s.forkFromMessage);
   const editMessage = useChatStore((s) => s.editMessage);
   const cancel = useChatStore((s) => s.cancel);
+  const logIn = useChatStore((s) => s.logIn);
+  const cancelLogIn = useChatStore((s) => s.cancelLogIn);
+  const logOut = useChatStore((s) => s.logOut);
+  const takeDraftToRestore = useChatStore((s) => s.takeDraftToRestore);
 
   // Swallowed rather than thrown: every one of these already reports itself
   // through `sessionError`, and an unhandled rejection out of an effect or a
@@ -138,11 +146,20 @@ export function ChatPane({
     return () => window.clearInterval(timer);
   }, [anyStreaming]);
 
+  // The message a login was needed for comes back once the agent can answer
+  // it, so asking again is one keystroke rather than retyping it.
+  useEffect(() => {
+    if (draftToRestore === null) return;
+    const restored = takeDraftToRestore();
+    if (restored !== null) setDraft(restored);
+  }, [draftToRestore, takeDraftToRestore]);
+
   const activeBackend = backends.find((b) => b.backend === backend);
+  const agentLabel = activeBackend?.label ?? "The agent";
 
   const send = () => {
     const text = draft.trim();
-    if (!text || streaming || !sessionId) return;
+    if (!text || streaming || !sessionId || login?.running) return;
     setDraft("");
     sendMessage(text).catch(ignore);
   };
@@ -224,6 +241,18 @@ export function ChatPane({
             >
               {copiedSessionId ? <CheckIcon /> : <CopyIcon />}
             </button>
+            {auth.can_log_out && (
+              <button
+                type="button"
+                className="wilkes-chat__icon-button"
+                title={`Sign out of ${agentLabel}`}
+                aria-label={`Sign out of ${agentLabel}`}
+                disabled={!sessionId || starting || streaming || Boolean(login?.running)}
+                onClick={() => logOut().catch(ignore)}
+              >
+                <LogOutIcon />
+              </button>
+            )}
             {onClose && (
               <button
                 type="button"
@@ -331,7 +360,7 @@ export function ChatPane({
       {sessionError && (
         <div className="wilkes-chat__banner wilkes-chat__banner--error" role="alert">
           <span className="wilkes-chat__banner-text">
-            {activeBackend?.label ?? "The agent"} — {sessionError}
+            {agentLabel} — {sessionError}
           </span>
           {backend && (
             <button
@@ -440,6 +469,47 @@ export function ChatPane({
         </div>
       )}
 
+      {login && (
+        <div className="wilkes-chat__login" role="alert">
+          <div className="wilkes-chat__login-lead">
+            {login.running
+              ? "Finish signing in in your browser…"
+              : `${agentLabel} isn't logged in.`}
+          </div>
+          {!login.running && (
+            <div className="wilkes-chat__muted">
+              {login.message}
+              {/* An agent that offered no login it can be given here still
+                  says how to get one, and this is the only place it is read. */}
+              {auth.methods.length === 0 && activeBackend ? ` — ${activeBackend.auth_note}` : ""}
+            </div>
+          )}
+          <div className="wilkes-chat__login-actions">
+            {login.running ? (
+              <button
+                type="button"
+                className="wilkes-chat__button"
+                onClick={() => cancelLogIn().catch(ignore)}
+              >
+                <StopIcon size={10} /> Cancel
+              </button>
+            ) : (
+              auth.methods.map((method) => (
+                <button
+                  key={method.id}
+                  type="button"
+                  className="wilkes-chat__button wilkes-chat__button--primary"
+                  title={method.description?.trim() || undefined}
+                  onClick={() => logIn(method.id).catch(ignore)}
+                >
+                  {method.name}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
       <form
         className="wilkes-chat__composer"
         onSubmit={(event) => {
@@ -480,7 +550,7 @@ export function ChatPane({
             <button
               type="submit"
               className="wilkes-chat__button wilkes-chat__button--primary"
-              disabled={!draft.trim() || !sessionId || starting}
+              disabled={!draft.trim() || !sessionId || starting || Boolean(login?.running)}
             >
               <SendIcon size={10} /> Send
             </button>
