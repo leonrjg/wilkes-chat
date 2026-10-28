@@ -570,7 +570,12 @@ mod tests {
         .unwrap();
         assert!(created.title.starts_with("New "));
 
-        touch_conversation(dir.path(), &created.conversation_id, Some("What is a monad?")).unwrap();
+        touch_conversation(
+            dir.path(),
+            &created.conversation_id,
+            Some("What is a monad?"),
+        )
+        .unwrap();
         let named = get_conversation(dir.path(), &created.conversation_id).unwrap();
         assert_eq!(named.title, "What is a monad?");
 
@@ -735,10 +740,16 @@ mod tests {
 
         assert_eq!(fork.messages.len(), 2);
         assert_eq!(fork.messages[1].text(), "first answer");
-        assert_eq!(fork.parent_conversation_id.as_deref(), Some(source.conversation_id.as_str()));
+        assert_eq!(
+            fork.parent_conversation_id.as_deref(),
+            Some(source.conversation_id.as_str())
+        );
         assert_eq!(fork.forked_from_message_id.as_deref(), Some("t1"));
         assert!(fork.branch_history_pending);
-        assert_eq!(fork.backend_session_id, "s2", "a fork gets a fresh agent session");
+        assert_eq!(
+            fork.backend_session_id, "s2",
+            "a fork gets a fresh agent session"
+        );
     }
 
     #[test]
@@ -788,7 +799,10 @@ mod tests {
 
         let at_answer = environment_at_message(&source, "t1");
         assert_eq!(at_answer.config_values[0].value, "sonnet");
-        assert_eq!(at_answer.host, Some(serde_json::json!({ "root": "/books" })));
+        assert_eq!(
+            at_answer.host,
+            Some(serde_json::json!({ "root": "/books" }))
+        );
     }
 
     #[test]
@@ -805,7 +819,10 @@ mod tests {
             )],
         );
 
-        assert_eq!(environment_at_message(&source, "m1"), ChatTurnEnvironment::default());
+        assert_eq!(
+            environment_at_message(&source, "m1"),
+            ChatTurnEnvironment::default()
+        );
         assert!(create_fork_conversation(
             dir.path(),
             &source.conversation_id,
@@ -928,7 +945,10 @@ mod tests {
 
         touch_conversation(dir.path(), "c1", None).unwrap();
         let text = std::fs::read_to_string(conversation_path(dir.path())).unwrap();
-        assert!(text.contains("\"version\": 2"), "rewritten at the current version");
+        assert!(
+            text.contains("\"version\": 2"),
+            "rewritten at the current version"
+        );
     }
 
     #[test]
