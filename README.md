@@ -161,7 +161,7 @@ the pane falls back to its `auth_note`.
 build is a build that changes without a commit saying so:
 
 ```toml
-wilkes-chat = { git = "https://github.com/leonrjg/wilkes-chat", tag = "v0.1.3" }
+wilkes-chat = { git = "https://github.com/leonrjg/wilkes-chat", tag = "v0.1.4" }
 ```
 
 Cargo's bundled libgit2 may fail to authenticate against this repository even
@@ -194,7 +194,7 @@ and does nothing else to it.
 **TypeScript.**
 
 ```
-npm install github:leonrjg/wilkes-chat#v0.1.3
+npm install github:leonrjg/wilkes-chat#v0.1.4
 ```
 
 `react`, `react-dom` and `zustand` are peer dependencies; `@tauri-apps/api` is
